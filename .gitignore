@@ -61,3 +61,6 @@ src/contrib/perl-xs/Botan.c
 src/contrib/perl-xs/Botan.o
 src/contrib/perl-xs/MYMETA*
 src/contrib/perl-xs/*blib
+
+# IncludeOS
+botan-includeos.tar.gz
