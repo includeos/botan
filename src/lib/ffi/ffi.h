@@ -1,6 +1,6 @@
 /*
 * FFI (C89 API)
-* (C) 2015 Jack Lloyd
+* (C) 2015,2017 Jack Lloyd
 *
 * Botan is released under the Simplified BSD License (see license.txt)
 */
@@ -158,6 +158,7 @@ BOTAN_DLL int botan_same_mem(const uint8_t* x, const uint8_t* y, size_t len);
 * @return 0 on success, 1 on failure
 */
 BOTAN_DLL int botan_hex_encode(const uint8_t* x, size_t len, char* out, uint32_t flags);
+
 // TODO: botan_hex_decode
 // TODO: botan_base64_encode
 // TODO: botan_base64_decode
@@ -171,9 +172,10 @@ typedef struct botan_rng_struct* botan_rng_t;
 * Initialize a random number generator object
 * @param rng rng object
 * @param rng_type type of the rng, possible values:
-*    "system" or nullptr: System_RNG, "user": AutoSeeded_RNG
+*    "system": System_RNG, "user": AutoSeeded_RNG
+* Set rng_type to null or empty string to let the library choose
 *
-* TODO: replace rng_type with simple flags? 
+* TODO: replace rng_type with simple flags?
 */
 BOTAN_DLL int botan_rng_init(botan_rng_t* rng, const char* rng_type);
 
@@ -182,7 +184,7 @@ BOTAN_DLL int botan_rng_init(botan_rng_t* rng, const char* rng_type);
 * @param rng rng object
 * @param out output buffer of size out_len
 * @param out_len number of requested bytes
-* @return 0 on success, -1 on failure
+* @return 0 on success, negative on failure
 *
 * TODO: better name
 */
@@ -229,6 +231,14 @@ BOTAN_DLL int botan_hash_init(botan_hash_t* hash, const char* hash_name, uint32_
 * @return 0 on success, a negative value on failure
 */
 BOTAN_DLL int botan_hash_output_length(botan_hash_t hash, size_t* output_length);
+
+/**
+* Writes the block size of the hash function to *block_size
+* @param hash hash object
+* @param output_length output buffer to hold the hash function output length
+* @return 0 on success, a negative value on failure
+*/
+BOTAN_DLL int botan_hash_block_size(botan_hash_t hash, size_t* block_size);
 
 /**
 * Send more input to the hash function
@@ -279,7 +289,7 @@ typedef struct botan_mac_struct* botan_mac_t;
 * @param mac mac object
 * @param mac_name name of the hash function, e.g., "HMAC(SHA-384)"
 * @param flags should be 0 in current API revision, all other uses are reserved
-*       and return -1
+*       and return a negative value (error code)
 * @return 0 on success, a negative value on failure
 */
 BOTAN_DLL int botan_mac_init(botan_mac_t* mac, const char* mac_name, uint32_t flags);
@@ -453,6 +463,169 @@ BOTAN_DLL int botan_bcrypt_generate(uint8_t* out, size_t* out_len,
                                     size_t work_factor,
                                     uint32_t flags);
 
+/*
+* Raw Block Cipher (PRP) interface
+*/
+typedef struct botan_block_cipher_struct* botan_block_cipher_t;
+
+/**
+* Initialize a block cipher object
+*/
+BOTAN_DLL int botan_block_cipher_init(botan_block_cipher_t* bc,
+                                      const char* cipher_name);
+
+/**
+* Destroy a block cipher object
+*/
+BOTAN_DLL int botan_block_cipher_destroy(botan_block_cipher_t bc);
+
+/**
+* Reinitializes the block cipher
+* @return 0 on success, a negative value on failure
+*/
+BOTAN_DLL int botan_block_cipher_clear(botan_block_cipher_t bc);
+
+/**
+* Set the key for a block cipher instance
+*/
+BOTAN_DLL int botan_block_cipher_set_key(botan_block_cipher_t bc,
+                                         const uint8_t key[], size_t len);
+
+/**
+* Return the positive block size of this block cipher, or negative to
+* indicate an error
+*/
+BOTAN_DLL int botan_block_cipher_block_size(botan_block_cipher_t bc);
+
+BOTAN_DLL int botan_block_cipher_encrypt_blocks(botan_block_cipher_t bc,
+                                                const uint8_t in[],
+                                                uint8_t out[],
+                                                size_t blocks);
+
+BOTAN_DLL int botan_block_cipher_decrypt_blocks(botan_block_cipher_t bc,
+                                                const uint8_t in[],
+                                                uint8_t out[],
+                                                size_t blocks);
+
+
+/*
+* Multiple precision integers
+*/
+typedef struct botan_mp_struct* botan_mp_t;
+
+BOTAN_DLL int botan_mp_init(botan_mp_t* mp);
+BOTAN_DLL int botan_mp_destroy(botan_mp_t mp);
+
+// writes botan_mp_num_bytes(mp)*2 + 1 bytes to out[]
+BOTAN_DLL int botan_mp_to_hex(const botan_mp_t mp, char* out);
+BOTAN_DLL int botan_mp_to_str(const botan_mp_t mp, uint8_t base, char* out, size_t* out_len);
+
+BOTAN_DLL int botan_mp_clear(botan_mp_t mp);
+
+BOTAN_DLL int botan_mp_set_from_int(botan_mp_t mp, int initial_value);
+BOTAN_DLL int botan_mp_set_from_mp(botan_mp_t dest, const botan_mp_t source);
+BOTAN_DLL int botan_mp_set_from_str(botan_mp_t dest, const char* str);
+BOTAN_DLL int botan_mp_set_from_radix_str(botan_mp_t dest, const char* str, size_t radix);
+
+BOTAN_DLL int botan_mp_num_bits(const botan_mp_t n, size_t* bits);
+BOTAN_DLL int botan_mp_num_bytes(const botan_mp_t n, size_t* bytes);
+
+// Writes botan_mp_num_bytes(mp) to vec
+BOTAN_DLL int botan_mp_to_bin(const botan_mp_t mp, uint8_t vec[]);
+BOTAN_DLL int botan_mp_from_bin(const botan_mp_t mp, const uint8_t vec[], size_t vec_len);
+
+BOTAN_DLL int botan_mp_to_uint32(const botan_mp_t mp, uint32_t* val);
+
+/**
+* This function is not well named. Returns 1 iff mp is greater than
+* *or equal to* zero. Use botan_mp_is_negative to detect negative
+* numbers, botan_mp_is_zero to check for zero.
+*/
+BOTAN_DLL int botan_mp_is_positive(const botan_mp_t mp);
+
+/**
+* Return 1 iff mp is less than 0
+*/
+BOTAN_DLL int botan_mp_is_negative(const botan_mp_t mp);
+
+BOTAN_DLL int botan_mp_flip_sign(botan_mp_t mp);
+//BOTAN_DLL int botan_mp_set_negative(botan_mp_t mp);
+
+BOTAN_DLL int botan_mp_is_zero(const botan_mp_t mp);
+BOTAN_DLL int botan_mp_is_odd(const botan_mp_t mp);
+BOTAN_DLL int botan_mp_is_even(const botan_mp_t mp);
+
+BOTAN_DLL int botan_mp_add(botan_mp_t result, const botan_mp_t x, const botan_mp_t y);
+BOTAN_DLL int botan_mp_sub(botan_mp_t result, const botan_mp_t x, const botan_mp_t y);
+BOTAN_DLL int botan_mp_mul(botan_mp_t result, const botan_mp_t x, const botan_mp_t y);
+
+BOTAN_DLL int botan_mp_div(botan_mp_t quotient,
+                           botan_mp_t remainder,
+                           const botan_mp_t x, const botan_mp_t y);
+
+BOTAN_DLL int botan_mp_mod_mul(botan_mp_t result, const botan_mp_t x,
+                               const botan_mp_t y, const botan_mp_t mod);
+
+/*
+* Returns 0 if x != y
+* Returns 1 if x == y
+* Returns negative number on error
+*/
+BOTAN_DLL int botan_mp_equal(const botan_mp_t x, const botan_mp_t y);
+
+/*
+* Sets *result to comparison result:
+* -1 if x < y, 0 if x == y, 1 if x > y
+* Returns negative number on error or zero on success
+*/
+BOTAN_DLL int botan_mp_cmp(int* result, const botan_mp_t x, const botan_mp_t y);
+
+/*
+* Swap two botan_mp_t
+*/
+BOTAN_DLL int botan_mp_swap(botan_mp_t x, botan_mp_t y);
+
+// Return (base^exponent) % modulus
+BOTAN_DLL int botan_mp_powmod(botan_mp_t out, const botan_mp_t base, const botan_mp_t exponent, const botan_mp_t modulus);
+
+BOTAN_DLL int botan_mp_lshift(botan_mp_t out, const botan_mp_t in, size_t shift);
+BOTAN_DLL int botan_mp_rshift(botan_mp_t out, const botan_mp_t in, size_t shift);
+
+BOTAN_DLL int botan_mp_mod_inverse(botan_mp_t out, const botan_mp_t in, const botan_mp_t modulus);
+
+BOTAN_DLL int botan_mp_rand_bits(botan_mp_t rand_out, botan_rng_t rng, size_t bits);
+
+BOTAN_DLL int botan_mp_rand_range(botan_mp_t rand_out, botan_rng_t rng,
+                                  const botan_mp_t lower_bound, const botan_mp_t upper_bound);
+
+BOTAN_DLL int botan_mp_gcd(botan_mp_t out, const botan_mp_t x, const botan_mp_t y);
+
+/**
+* Returns 0 if n is not prime
+* Returns 1 if n is prime
+* Returns negative number on error
+*/
+BOTAN_DLL int botan_mp_is_prime(const botan_mp_t n, botan_rng_t rng, size_t test_prob);
+
+/**
+* Returns 0 if specified bit of n is not set
+* Returns 1 if specified bit of n is set
+* Returns negative number on error
+*/
+BOTAN_DLL int botan_mp_get_bit(const botan_mp_t n, size_t bit);
+
+/**
+* Set the specified bit
+*/
+BOTAN_DLL int botan_mp_set_bit(botan_mp_t n, size_t bit);
+
+/**
+* Clear the specified bit
+*/
+BOTAN_DLL int botan_mp_clear_bit(botan_mp_t n, size_t bit);
+
+/* Bcrypt password hashing */
+
 /**
 * Check a previously created password hash
 * @param pass the password to check against
@@ -473,11 +646,14 @@ BOTAN_DLL int botan_privkey_create(botan_privkey_t* key,
                                    const char* algo_params,
                                    botan_rng_t rng);
 
+#define BOTAN_CHECK_KEY_EXPENSIVE_TESTS 1
+
+BOTAN_DLL int botan_privkey_check_key(botan_privkey_t key, botan_rng_t rng, uint32_t flags);
+
 BOTAN_DLL int botan_privkey_create_rsa(botan_privkey_t* key, botan_rng_t rng, size_t n_bits);
 BOTAN_DLL int botan_privkey_create_ecdsa(botan_privkey_t* key, botan_rng_t rng, const char* params);
 BOTAN_DLL int botan_privkey_create_ecdh(botan_privkey_t* key, botan_rng_t rng, const char* params);
 BOTAN_DLL int botan_privkey_create_mceliece(botan_privkey_t* key, botan_rng_t rng, size_t n, size_t t);
-
 
 /*
 * Input currently assumed to be PKCS #8 structure;
@@ -506,12 +682,39 @@ BOTAN_DLL int botan_privkey_export(botan_privkey_t key,
 /*
 * Set encryption_algo to NULL or "" to have the library choose a default (recommended)
 */
+BOTAN_DEPRECATED("Use botan_privkey_export_encrypted_pbkdf_{msec,iter}")
 BOTAN_DLL int botan_privkey_export_encrypted(botan_privkey_t key,
                                              uint8_t out[], size_t* out_len,
                                              botan_rng_t rng,
                                              const char* passphrase,
                                              const char* encryption_algo,
                                              uint32_t flags);
+
+/*
+* Export a private key, running PBKDF for specified amount of time
+* @param key the private key to export
+*/
+BOTAN_DLL int botan_privkey_export_encrypted_pbkdf_msec(botan_privkey_t key,
+                                                        uint8_t out[], size_t* out_len,
+                                                        botan_rng_t rng,
+                                                        const char* passphrase,
+                                                        uint32_t pbkdf_msec_runtime,
+                                                        size_t* pbkdf_iterations_out,
+                                                        const char* cipher_algo,
+                                                        const char* pbkdf_algo,
+                                                        uint32_t flags);
+
+/*
+* Export a private key using the specified number of iterations.
+*/
+BOTAN_DLL int botan_privkey_export_encrypted_pbkdf_iter(botan_privkey_t key,
+                                                        uint8_t out[], size_t* out_len,
+                                                        botan_rng_t rng,
+                                                        const char* passphrase,
+                                                        size_t pbkdf_iterations,
+                                                        const char* cipher_algo,
+                                                        const char* pbkdf_algo,
+                                                        uint32_t flags);
 
 typedef struct botan_pubkey_struct* botan_pubkey_t;
 
@@ -523,6 +726,11 @@ BOTAN_DLL int botan_pubkey_export(botan_pubkey_t key, uint8_t out[], size_t* out
 
 BOTAN_DLL int botan_pubkey_algo_name(botan_pubkey_t key, char out[], size_t* out_len);
 
+/**
+* Returns 0 if key is valid, negative if invalid key or some other error
+*/
+BOTAN_DLL int botan_pubkey_check_key(botan_pubkey_t key, botan_rng_t rng, uint32_t flags);
+
 BOTAN_DLL int botan_pubkey_estimated_strength(botan_pubkey_t key, size_t* estimate);
 
 BOTAN_DLL int botan_pubkey_fingerprint(botan_pubkey_t key, const char* hash,
@@ -530,6 +738,98 @@ BOTAN_DLL int botan_pubkey_fingerprint(botan_pubkey_t key, const char* hash,
 
 BOTAN_DLL int botan_pubkey_destroy(botan_pubkey_t key);
 
+/*
+* Get arbitrary named fields from public or privat keys
+*/
+BOTAN_DLL int botan_pubkey_get_field(botan_mp_t output,
+                                     botan_pubkey_t key,
+                                     const char* field_name);
+
+BOTAN_DLL int botan_privkey_get_field(botan_mp_t output,
+                                      botan_privkey_t key,
+                                      const char* field_name);
+
+/*
+* Algorithm specific key operations: RSA
+*/
+BOTAN_DLL int botan_privkey_load_rsa(botan_privkey_t* key,
+                                     botan_mp_t p,
+                                     botan_mp_t q,
+                                     botan_mp_t e);
+
+BOTAN_DLL int botan_privkey_rsa_get_p(botan_mp_t p, botan_privkey_t rsa_key);
+BOTAN_DLL int botan_privkey_rsa_get_q(botan_mp_t q, botan_privkey_t rsa_key);
+BOTAN_DLL int botan_privkey_rsa_get_d(botan_mp_t d, botan_privkey_t rsa_key);
+BOTAN_DLL int botan_privkey_rsa_get_n(botan_mp_t n, botan_privkey_t rsa_key);
+BOTAN_DLL int botan_privkey_rsa_get_e(botan_mp_t e, botan_privkey_t rsa_key);
+
+BOTAN_DLL int botan_pubkey_load_rsa(botan_pubkey_t* key,
+                                    botan_mp_t n,
+                                    botan_mp_t e);
+
+BOTAN_DLL int botan_pubkey_rsa_get_e(botan_mp_t e, botan_pubkey_t rsa_key);
+BOTAN_DLL int botan_pubkey_rsa_get_n(botan_mp_t n, botan_pubkey_t rsa_key);
+
+/*
+* Algorithm specific key operations: DSA
+*/
+BOTAN_DLL int botan_privkey_load_dsa(botan_privkey_t* key,
+                                     botan_mp_t p,
+                                     botan_mp_t q,
+                                     botan_mp_t g,
+                                     botan_mp_t x);
+
+BOTAN_DLL int botan_pubkey_load_dsa(botan_pubkey_t* key,
+                                    botan_mp_t p,
+                                    botan_mp_t q,
+                                    botan_mp_t g,
+                                    botan_mp_t y);
+
+BOTAN_DLL int botan_privkey_dsa_get_x(botan_mp_t n, botan_privkey_t key);
+
+BOTAN_DLL int botan_pubkey_dsa_get_p(botan_mp_t p, botan_pubkey_t key);
+BOTAN_DLL int botan_pubkey_dsa_get_q(botan_mp_t q, botan_pubkey_t key);
+BOTAN_DLL int botan_pubkey_dsa_get_g(botan_mp_t d, botan_pubkey_t key);
+BOTAN_DLL int botan_pubkey_dsa_get_y(botan_mp_t y, botan_pubkey_t key);
+
+/*
+* Algorithm specific key operations: ElGamal
+*/
+
+/*
+* Loads ElGamal public key
+* @param key variable populated with key material
+* @param p prime order of a Z_p group
+* @param g group generator
+* @param y public key
+*
+* @pre key is NULL on input
+* @post function allocates memory and assigns to `key'
+*
+* @return 0 on success, a negative value on failure
+*/
+BOTAN_DLL int botan_pubkey_load_elgamal(botan_pubkey_t* key,
+                                        botan_mp_t p,
+                                        botan_mp_t g,
+                                        botan_mp_t y);
+
+/*
+* Loads ElGamal private key
+*
+* @param key variable populated with key material
+* @param p prime order of a Z_p group
+* @param g group generator
+* @param x private key
+*
+* @pre key is NULL on input
+* @post function allocates memory and assigns to `key'
+*
+* @return 0 on success, a negative value on failure
+*/
+BOTAN_DLL int botan_privkey_load_elgamal(botan_privkey_t* key,
+                                         botan_mp_t p,
+                                         botan_mp_t g,
+                                         botan_mp_t x);
 
 /*
 * Public Key Encryption
@@ -561,7 +861,7 @@ BOTAN_DLL int botan_pk_op_decrypt_destroy(botan_pk_op_decrypt_t op);
 
 BOTAN_DLL int botan_pk_op_decrypt(botan_pk_op_decrypt_t op,
                                   uint8_t out[], size_t* out_len,
-                                  uint8_t ciphertext[], size_t ciphertext_len);
+                                  const uint8_t ciphertext[], size_t ciphertext_len);
 
 /*
 * Signature Generation
@@ -610,6 +910,8 @@ BOTAN_DLL int botan_pk_op_key_agreement(botan_pk_op_ka_t op,
                                         uint8_t out[], size_t* out_len,
                                         const uint8_t other_key[], size_t other_key_len,
                                         const uint8_t salt[], size_t salt_len);
+
+BOTAN_DLL int botan_pkcs_hash_id(const char* hash_name, uint8_t pkcs_id[], size_t* pkcs_id_len);
 
 
 /*

@@ -49,7 +49,7 @@ External Providers, Hardware Support
 
 * Access to system certificate stores (Windows, OS X)
 * Extend OpenSSL provider (DH, HMAC, CMAC, GCM)
-* Support using BoringSSL or LibreSSL instead of OpenSSL
+* Support using BoringSSL instead of OpenSSL or LibreSSL
 * /dev/crypto provider (ciphers, hashes)
 * Windows CryptoAPI provider (ciphers, hashes, RSA)
 * Apple CommonCrypto
@@ -108,6 +108,11 @@ New Protocols / Formats
   - Subset #2: Process OpenPGP public keys
   - Subset #3: Verification of OpenPGP signatures
 
+Cleanups
+-----------
+
+* Split ffi.cpp and test_ffi.cpp into multiple files
+
 Compat Headers
 ----------------
 
@@ -119,7 +124,8 @@ Compat Headers
 FFI and Bindings
 ----------------------------------------
 
-* Expose certificates
+* Expose compression
+* Expose more of X.509 (CRLs, OCSP, cert signing, etc)
 * Expose TLS
 * Write a CLI or HTTPS client in Python
 

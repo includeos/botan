@@ -117,6 +117,15 @@
 #endif
 
 /*
+* Define BOTAN_ALIGNAS (for MSVC 2013)
+*/
+#if defined(BOTAN_BUILD_COMPILER_IS_MSVC_2013)
+  #define BOTAN_ALIGNAS(n) /**/
+#else
+  #define BOTAN_ALIGNAS(n) alignas(n)
+#endif
+
+/*
 * Define BOTAN_PARALLEL_FOR
 */
 #if !defined(BOTAN_PARALLEL_FOR)
@@ -140,8 +149,8 @@
   #define BOTAN_PARALLEL_SIMD_FOR _Pragma("simd") for
 #elif defined(BOTAN_TARGET_HAS_OPENMP)
   #define BOTAN_PARALLEL_SIMD_FOR _Pragma("omp simd") for
-#elif defined(BOTAN_TARGET_COMPILER_IS_GCC)
-  #define BOTAN_PARALLEL_FOR _Pragma("GCC ivdep") for
+#elif defined(BOTAN_BUILD_COMPILER_IS_GCC)
+  #define BOTAN_PARALLEL_SIMD_FOR _Pragma("GCC ivdep") for
 #else
   #define BOTAN_PARALLEL_SIMD_FOR for
 #endif

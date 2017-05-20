@@ -1,4 +1,6 @@
-define UTIL_FUNCTIONS 20161127
+<defines>
+UTIL_FUNCTIONS -> 20161127
+</defines>
 
 load_on always
 
@@ -20,6 +22,7 @@ parsing.h
 rotate.h
 types.h
 version.h
+stl_compatibility.h
 </header:public>
 
 <header:internal>
