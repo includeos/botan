@@ -1,5 +1,6 @@
 /*
 * (C) 2009,2010,2014,2015 Jack Lloyd
+* (C) 2017 René Korthaus, Rohde & Schwarz Cybersecurity
 *
 * Botan is released under the Simplified BSD License (see license.txt)
 */
@@ -10,29 +11,34 @@
 #include <botan/hash.h>
 #include <botan/cpuid.h>
 #include <botan/hex.h>
+#include <botan/entropy_src.h>
 
 #if defined(BOTAN_HAS_BASE64_CODEC)
-  #include <botan/base64.h>
+   #include <botan/base64.h>
 #endif
 
 #if defined(BOTAN_HAS_AUTO_SEEDING_RNG)
-  #include <botan/auto_rng.h>
+   #include <botan/auto_rng.h>
 #endif
 
 #if defined(BOTAN_HAS_SYSTEM_RNG)
-  #include <botan/system_rng.h>
+   #include <botan/system_rng.h>
 #endif
 
 #if defined(BOTAN_HAS_RDRAND_RNG)
-  #include <botan/rdrand_rng.h>
+   #include <botan/rdrand_rng.h>
 #endif
 
 #if defined(BOTAN_HAS_HTTP_UTIL)
-  #include <botan/http_util.h>
+   #include <botan/http_util.h>
 #endif
 
 #if defined(BOTAN_HAS_BCRYPT)
-  #include <botan/bcrypt.h>
+   #include <botan/bcrypt.h>
+#endif
+
+#if defined(BOTAN_HAS_HMAC)
+   #include <botan/hmac.h>
 #endif
 
 namespace Botan_CLI {
@@ -127,13 +133,17 @@ class Hash final : public Command
          std::unique_ptr<Botan::HashFunction> hash_fn(Botan::HashFunction::create(hash_algo));
 
          if(!hash_fn)
+            {
             throw CLI_Error_Unsupported("hashing", hash_algo);
+            }
 
          const size_t buf_size = get_arg_sz("buf-size");
 
          std::vector<std::string> files = get_arg_list("files");
          if(files.empty())
-            files.push_back("-"); // read stdin if no arguments on command line
+            {
+            files.push_back("-");
+            } // read stdin if no arguments on command line
 
          for(const std::string& fsname : files)
             {
@@ -156,7 +166,7 @@ BOTAN_REGISTER_COMMAND("hash", Hash);
 class RNG final : public Command
    {
    public:
-      RNG() : Command("rng --system --rdrand *bytes") {}
+      RNG() : Command("rng --system --rdrand --entropy *bytes") {}
 
       void go() override
          {
@@ -177,6 +187,15 @@ class RNG final : public Command
             rng.reset(new Botan::RDRAND_RNG);
 #else
             error_output() << "rdrand_rng disabled in build\n";
+            return;
+#endif
+            }
+         else if(flag_set("entropy"))
+            {
+#if defined(BOTAN_HAS_AUTO_SEEDING_RNG)
+            rng.reset(new Botan::AutoSeeded_RNG(Botan::Entropy_Sources::global_sources()));
+#else
+            error_output() << "auto_rng disabled in build\n";
             return;
 #endif
             }
@@ -216,6 +235,43 @@ BOTAN_REGISTER_COMMAND("http_get", HTTP_Get);
 
 #endif // http_util
 
+#if defined(BOTAN_HAS_HEX_CODEC)
+
+class Hex_Encode final : public Command
+   {
+   public:
+      Hex_Encode() : Command("hex_enc file") {}
+
+      void go() override
+         {
+         auto hex_enc_f = [&](const uint8_t b[], size_t l) { output() << Botan::hex_encode(b, l); };
+         this->read_file(get_arg("file"), hex_enc_f, 2);
+         }
+   };
+
+BOTAN_REGISTER_COMMAND("hex_enc", Hex_Encode);
+
+class Hex_Decode final : public Command
+   {
+   public:
+      Hex_Decode() : Command("hex_dec file") {}
+
+      void go() override
+         {
+         auto hex_dec_f = [&](const uint8_t b[], size_t l)
+            {
+            std::vector<uint8_t> bin = Botan::hex_decode(reinterpret_cast<const char*>(b), l);
+            output().write(reinterpret_cast<const char*>(bin.data()), bin.size());
+            };
+
+         this->read_file(get_arg("file"), hex_dec_f, 2);
+         }
+   };
+
+BOTAN_REGISTER_COMMAND("hex_dec", Hex_Decode);
+
+#endif
+
 #if defined(BOTAN_HAS_BASE64_CODEC)
 
 class Base64_Encode final : public Command
@@ -225,9 +281,11 @@ class Base64_Encode final : public Command
 
       void go() override
          {
-         this->read_file(get_arg("file"),
-                         [&](const uint8_t b[], size_t l) { output() << Botan::base64_encode(b, l); },
-                         768);
+         auto onData = [&](const uint8_t b[], size_t l)
+            {
+            output() << Botan::base64_encode(b, l);
+            };
+         this->read_file(get_arg("file"), onData, 768);
          }
    };
 
@@ -246,9 +304,7 @@ class Base64_Decode final : public Command
             output().write(reinterpret_cast<const char*>(bin.data()), bin.size());
             };
 
-         this->read_file(get_arg("file"),
-                         write_bin,
-                         1024);
+         this->read_file(get_arg("file"), write_bin, 1024);
          }
    };
 
@@ -298,5 +354,49 @@ class Check_Bcrypt final : public Command
 BOTAN_REGISTER_COMMAND("check_bcrypt", Check_Bcrypt);
 
 #endif // bcrypt
+
+#if defined(BOTAN_HAS_HMAC)
+
+class HMAC final : public Command
+   {
+   public:
+      HMAC() : Command("hmac --hash=SHA-256 --buf-size=4096 key *files") {}
+
+      void go() override
+         {
+         const std::string hash_algo = get_arg("hash");
+         std::unique_ptr<Botan::MessageAuthenticationCode> hmac(Botan::MessageAuthenticationCode::create("HMAC(" + hash_algo +
+               ")"));
+
+         if(!hmac)
+            { throw CLI_Error_Unsupported("HMAC", hash_algo); }
+
+         hmac->set_key(slurp_file(get_arg("key")));
+
+         const size_t buf_size = get_arg_sz("buf-size");
+
+         std::vector<std::string> files = get_arg_list("files");
+         if(files.empty())
+            { files.push_back("-"); } // read stdin if no arguments on command line
+
+         for(const std::string& fsname : files)
+            {
+            try
+               {
+               auto update_hmac = [&](const uint8_t b[], size_t l) { hmac->update(b, l); };
+               read_file(fsname, update_hmac, buf_size);
+               output() << Botan::hex_encode(hmac->final()) << " " << fsname << "\n";
+               }
+            catch(CLI_IO_Error& e)
+               {
+               error_output() << e.what() << "\n";
+               }
+            }
+         }
+   };
+
+BOTAN_REGISTER_COMMAND("hmac", HMAC);
+
+#endif // hmac
 
 }

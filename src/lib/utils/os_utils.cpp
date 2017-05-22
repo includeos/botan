@@ -345,7 +345,7 @@ void botan_sigill_handler(int)
 
 int OS::run_cpu_instruction_probe(std::function<int ()> probe_fn)
    {
-   int probe_result = -3;
+   volatile int probe_result = -3;
 
 #if defined(BOTAN_TARGET_OS_TYPE_IS_UNIX)
    struct sigaction old_sigaction;
@@ -360,26 +360,17 @@ int OS::run_cpu_instruction_probe(std::function<int ()> probe_fn)
    if(rc != 0)
       throw Exception("run_cpu_instruction_probe sigaction failed");
 
-   try
-      {
-      rc = ::sigsetjmp(g_sigill_jmp_buf, /*save sigs*/1);
+   rc = ::sigsetjmp(g_sigill_jmp_buf, /*save sigs*/1);
 
-      if(rc == 0)
-         {
-         // first call to sigsetjmp
-         probe_result = probe_fn();
-         }
-      else if(rc == 1)
-         {
-         // non-local return from siglongjmp in signal handler: return error
-         probe_result = -1;
-         }
-      else
-         throw Exception("run_cpu_instruction_probe unexpected sigsetjmp return value");
-      }
-   catch(...)
+   if(rc == 0)
       {
-      probe_result = -2;
+      // first call to sigsetjmp
+      probe_result = probe_fn();
+      }
+   else if(rc == 1)
+      {
+      // non-local return from siglongjmp in signal handler: return error
+      probe_result = -1;
       }
 
    // Restore old SIGILL handler, if any
@@ -392,14 +383,7 @@ int OS::run_cpu_instruction_probe(std::function<int ()> probe_fn)
    // Windows SEH
    __try
       {
-      try
-         {
-         probe_result = probe_fn();
-         }
-      catch(...)
-         {
-         probe_result = -2;
-         }
+      probe_result = probe_fn();
       }
    __except(::GetExceptionCode() == EXCEPTION_ILLEGAL_INSTRUCTION ?
             EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH)

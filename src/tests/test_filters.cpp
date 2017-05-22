@@ -1,6 +1,8 @@
 /*
 * (C) 2016 Daniel Neus
-*     2016 Jack Lloyd
+*     2016,2017 Jack Lloyd
+*     2017 René Korthaus
+*     2017 Philippe Lieser
 *
 * Botan is released under the Simplified BSD License (see license.txt)
 */
@@ -8,12 +10,17 @@
 #include "tests.h"
 
 #if defined(BOTAN_HAS_FILTERS)
-  #include <botan/secqueue.h>
-  #include <botan/pipe.h>
-  #include <botan/filters.h>
-  #include <botan/data_snk.h>
-  #include <botan/comp_filter.h>
-  #include <botan/cipher_filter.h>
+   #include <botan/secqueue.h>
+   #include <botan/pipe.h>
+   #include <botan/filters.h>
+   #include <botan/data_snk.h>
+   #include <botan/comp_filter.h>
+   #include <botan/cipher_filter.h>
+#endif
+
+#if defined(BOTAN_HAS_CODEC_FILTERS)
+   #include <botan/hex_filt.h>
+   #include <botan/b64_filt.h>
 #endif
 
 namespace Botan_Tests {
@@ -29,20 +36,18 @@ class Filter_Tests : public Test
 
          results.push_back(test_secqueue());
          results.push_back(test_data_src_sink());
+         results.push_back(test_data_src_sink_flush());
          results.push_back(test_pipe_io());
          results.push_back(test_pipe_errors());
          results.push_back(test_pipe_hash());
          results.push_back(test_pipe_mac());
          results.push_back(test_pipe_stream());
-         results.push_back(test_pipe_cipher());
+         results.push_back(test_pipe_cbc());
          results.push_back(test_pipe_compress());
          results.push_back(test_pipe_codec());
          results.push_back(test_fork());
          results.push_back(test_chain());
-
-#if defined(BOTAN_TARGET_OS_HAS_THREADS)
          results.push_back(test_threaded_fork());
-#endif
 
          return results;
          }
@@ -75,7 +80,7 @@ class Filter_Tests : public Test
             queue_a = queue_b;
             result.test_eq("bytes_read is set correctly", queue_a.get_bytes_read(), 0);
             }
-         catch (std::exception& e)
+         catch(std::exception& e)
             {
             result.test_failure("SecureQueue", e.what());
             }
@@ -86,6 +91,8 @@ class Filter_Tests : public Test
       Test::Result test_data_src_sink()
          {
          Test::Result result("DataSink");
+
+#if defined(BOTAN_HAS_CODEC_FILTERS)
          std::ostringstream oss;
 
          Botan::Pipe pipe(new Botan::Hex_Decoder, new Botan::DataSink_Stream(oss));
@@ -105,7 +112,32 @@ class Filter_Tests : public Test
          pipe.process_msg(input_strm);
 
          result.test_eq("output string", oss.str(), "efghAAAACC");
+#endif
+         return result;
+         }
 
+      Test::Result test_data_src_sink_flush()
+         {
+         Test::Result result("DataSinkFlush");
+
+#if defined(BOTAN_HAS_CODEC_FILTERS)
+         std::string tmp_name("botan_test_data_src_sink_flush.tmp");
+         std::ofstream outfile(tmp_name);
+
+         Botan::Pipe pipe(new Botan::Hex_Decoder, new Botan::DataSink_Stream(outfile));
+
+         Botan::DataSource_Memory input_mem("65666768");
+         pipe.process_msg(input_mem);
+
+         std::ifstream outfile_read(tmp_name);
+         std::stringstream ss;
+         ss << outfile_read.rdbuf();
+         std::string foo = ss.str();
+
+         result.test_eq("output string", ss.str(), "efgh");
+
+         std::remove(tmp_name.c_str());
+#endif
          return result;
          }
 
@@ -113,6 +145,7 @@ class Filter_Tests : public Test
          {
          Test::Result result("Pipe I/O operators");
 
+#if defined(BOTAN_HAS_CODEC_FILTERS)
          Botan::Pipe pipe(new Botan::Hex_Encoder);
 
          pipe.process_msg("ABCD");
@@ -129,6 +162,8 @@ class Filter_Tests : public Test
          pipe.set_default_msg(1);
          oss << pipe;
          result.test_eq("output string2", oss.str(), "4142434441414141");
+#endif
+
          return result;
          }
 
@@ -143,20 +178,20 @@ class Filter_Tests : public Test
          pipe.pop(); // empty pipe, so ignored
 
          // can't explicitly insert a queue into the pipe because they are implicit
-         result.test_throws("pipe error", "Invalid argument Pipe::append: SecureQueue cannot be used",
-                            [&]() { pipe.append(new Botan::SecureQueue); });
-         result.test_throws("pipe error", "Invalid argument Pipe::prepend: SecureQueue cannot be used",
-                            [&]() { pipe.prepend(new Botan::SecureQueue); });
+         result.test_throws("pipe error", "Invalid argument Pipe::append: SecureQueue cannot be used", [&]()
+            { pipe.append(new Botan::SecureQueue); });
+         result.test_throws("pipe error", "Invalid argument Pipe::prepend: SecureQueue cannot be used", [&]()
+            { pipe.prepend(new Botan::SecureQueue); });
 
          pipe.start_msg();
 
          // now inside a message, cannot modify pipe structure
-         result.test_throws("pipe error", "Cannot append to a Pipe while it is processing",
-                            [&]() { pipe.append(nullptr); });
-         result.test_throws("pipe error", "Cannot prepend to a Pipe while it is processing",
-                            [&]() { pipe.prepend(nullptr); });
-         result.test_throws("pipe error", "Cannot pop off a Pipe while it is processing",
-                            [&]() { pipe.pop(); });
+         result.test_throws("pipe error", "Cannot append to a Pipe while it is processing", [&]()
+            { pipe.append(nullptr); });
+         result.test_throws("pipe error", "Cannot prepend to a Pipe while it is processing", [&]()
+            { pipe.prepend(nullptr); });
+         result.test_throws("pipe error", "Cannot pop off a Pipe while it is processing", [&]()
+            { pipe.pop(); });
 
          pipe.end_msg();
 
@@ -170,6 +205,8 @@ class Filter_Tests : public Test
       Test::Result test_pipe_mac()
          {
          Test::Result result("Pipe");
+
+#if defined(BOTAN_HAS_CODEC_FILTERS) && defined(BOTAN_HAS_HMAC) && defined(BOTAN_HAS_SHA2_32)
          const Botan::SymmetricKey key("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
          Botan::Pipe pipe(new Botan::MAC_Filter("HMAC(SHA-256)", key, 12),
                           new Botan::Base64_Encoder);
@@ -181,13 +218,15 @@ class Filter_Tests : public Test
          result.test_eq("MAC 1", pipe.read_all_as_string(0), "e7NoVbtudgU0QiCZ");
          result.test_eq("MAC 2", pipe.read_all_as_string(1), "LhPnfEG+0rk+Ej6y");
          result.test_eq("MAC 3", pipe.read_all_as_string(2), "e7NoVbtudgU0QiCZ");
-
+#endif
          return result;
          }
 
       Test::Result test_pipe_hash()
          {
          Test::Result result("Pipe");
+
+#if defined(BOTAN_HAS_SHA2_32)
          Botan::Pipe pipe(new Botan::Hash_Filter("SHA-224"));
          pipe.pop();
          pipe.append(new Botan::Hash_Filter("SHA-256"));
@@ -231,14 +270,15 @@ class Filter_Tests : public Test
          pipe.process_msg(std::vector<uint8_t>(1024, 0));
          result.test_eq("Expected CRC32d", pipe.read_all(1), "99841F60");
 #endif
-
+#endif
          return result;
          }
 
-      Test::Result test_pipe_cipher()
+      Test::Result test_pipe_cbc()
          {
-         Test::Result result("Pipe");
+         Test::Result result("Pipe CBC");
 
+#if defined(BOTAN_HAS_AES) && defined(BOTAN_HAS_MODE_CBC) && defined(BOTAN_HAS_CIPHER_MODE_PADDING)
          Botan::Cipher_Mode_Filter* cipher =
             new Botan::Cipher_Mode_Filter(Botan::get_cipher_mode("AES-128/CBC/PKCS7", Botan::ENCRYPTION));
 
@@ -250,7 +290,7 @@ class Filter_Tests : public Test
          result.test_eq("Cipher key length max", cipher->key_spec().maximum_keylength(), 16);
          result.test_eq("Cipher key length min", cipher->key_spec().minimum_keylength(), 16);
 
-          // takes ownership of cipher
+         // takes ownership of cipher
          Botan::Pipe pipe(cipher);
 
          cipher->set_key(Botan::SymmetricKey("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"));
@@ -263,13 +303,24 @@ class Filter_Tests : public Test
          auto ciphertext = pipe.read_all();
          result.test_eq("Bytes read after", pipe.get_bytes_read(), ciphertext.size());
 
-         result.test_eq("Ciphertext", ciphertext, "9BDD7300E0CB61CA71FFF957A71605DB6836159C36781246A1ADF50982757F4B");
+         result.test_eq("Ciphertext", ciphertext, "9BDD7300E0CB61CA71FFF957A71605DB 6836159C36781246A1ADF50982757F4B");
+
+         pipe.process_msg("IV carryover");
+         auto ciphertext2 = pipe.read_all(1);
+         pipe.process_msg("IV carryover2");
+         auto ciphertext3 = pipe.read_all(2);
+
+         // These values tested against PyCrypto
+         result.test_eq("Ciphertext2", ciphertext2, "AA8D682958A4A044735DAC502B274DB2");
+         result.test_eq("Ciphertext3", ciphertext3, "1241B9976F73051BCF809525D6E86C25");
 
          Botan::Cipher_Mode_Filter* dec_cipher =
             new Botan::Cipher_Mode_Filter(Botan::get_cipher_mode("AES-128/CBC/PKCS7", Botan::DECRYPTION));
          pipe.append(dec_cipher);
          dec_cipher->set_key(Botan::SymmetricKey("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"));
          dec_cipher->set_iv(Botan::InitializationVector("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB"));
+
+         // reset the IV on the encryption filter
          cipher->set_iv(Botan::InitializationVector("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB"));
 
          const std::vector<uint8_t> zeros_in(1024);
@@ -278,12 +329,13 @@ class Filter_Tests : public Test
          pipe.write(src);
          pipe.end_msg();
 
-         pipe.set_default_msg(1);
+         pipe.set_default_msg(3);
          result.test_eq("Bytes read", pipe.get_bytes_read(), 0);
          Botan::secure_vector<uint8_t> zeros_out = pipe.read_all();
          result.test_eq("Bytes read", pipe.get_bytes_read(), zeros_out.size());
 
          result.test_eq("Cipher roundtrip", zeros_in, zeros_out);
+#endif
          return result;
          }
 
@@ -326,6 +378,7 @@ class Filter_Tests : public Test
          {
          Test::Result result("Pipe");
 
+#if defined(BOTAN_HAS_CODEC_FILTERS)
          Botan::Pipe pipe(new Botan::Base64_Encoder);
 
          result.test_eq("Message count", pipe.message_count(), 0);
@@ -368,8 +421,8 @@ class Filter_Tests : public Test
          pipe.reset();
          pipe.append(new Botan::Hex_Decoder);
          pipe.append(new Botan::Base64_Encoder(/*break_lines=*/true,
-                                               /*line_length=*/4,
-                                               /*trailing_newline=*/true));
+                     /*line_length=*/4,
+                     /*trailing_newline=*/true));
 
          pipe.process_msg("6dab1eeb8a2eb69bad");
          result.test_eq("base64 with linebreaks and trailing newline", pipe.read_all_as_string(5), "base\n64ou\ntput\n\n");
@@ -391,14 +444,16 @@ class Filter_Tests : public Test
          pipe.process_msg("hex encoding this string");
          result.test_eq("hex lowercase with linebreaks", pipe.read_all_as_string(8),
                         "68657820656e636f\n64696e6720746869\n7320737472696e67\n");
+#endif
 
          return result;
          }
 
       Test::Result test_pipe_stream()
          {
-         Test::Result result("Pipe");
+         Test::Result result("Pipe CTR");
 
+#if defined(BOTAN_HAS_CTR_BE)
          Botan::Keyed_Filter* aes = nullptr;
          const Botan::SymmetricKey some_other_key("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE");
          const Botan::SymmetricKey key("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
@@ -413,6 +468,9 @@ class Filter_Tests : public Test
          result.test_eq("Message count", pipe.message_count(), 1);
          result.test_eq("Ciphertext", pipe.read_all(), "FDFD6238F7C6");
 
+         pipe.process_msg("ABCDEF");
+         result.test_eq("Ciphertext", pipe.read_all(1), "8E72F1153514");
+#endif
          return result;
          }
 
@@ -420,6 +478,7 @@ class Filter_Tests : public Test
          {
          Test::Result result("Filter Fork");
 
+#if defined(BOTAN_HAS_SHA2_32) && defined(BOTAN_HAS_SHA2_64)
          Botan::Pipe pipe(new Botan::Fork(new Botan::Hash_Filter("SHA-256"),
                                           new Botan::Hash_Filter("SHA-512-256")));
 
@@ -430,7 +489,7 @@ class Filter_Tests : public Test
          // Test reading out of order
          result.test_eq("Hash 2", pipe.read_all(1), "610480FFA82F24F6926544B976FE387878E3D973C03DFD591C2E9896EFB903E0");
          result.test_eq("Hash 1", pipe.read_all(0), "C00862D1C6C1CF7C1B49388306E7B3C1BB79D8D6EC978B41035B556DBB3797DF");
-
+#endif
          return result;
          }
 
@@ -438,11 +497,12 @@ class Filter_Tests : public Test
          {
          Test::Result result("Filter Chain");
 
+#if defined(BOTAN_HAS_CODEC_FILTERS) && defined(BOTAN_HAS_SHA2_32) && defined(BOTAN_HAS_SHA2_64)
          std::unique_ptr<Botan::Fork> fork(
             new Botan::Fork(
                new Botan::Chain(new Botan::Hash_Filter("SHA-256"), new Botan::Hex_Encoder),
                new Botan::Chain(new Botan::Hash_Filter("SHA-512-256"), new Botan::Hex_Encoder)
-               ));
+            ));
 
          result.test_eq("Fork has a name", fork->name(), "Fork");
          Botan::Pipe pipe(fork.release());
@@ -451,19 +511,22 @@ class Filter_Tests : public Test
          pipe.process_msg("OMG");
          result.test_eq("Message count", pipe.message_count(), 2);
 
-         result.test_eq("Hash 1", pipe.read_all_as_string(0), "C00862D1C6C1CF7C1B49388306E7B3C1BB79D8D6EC978B41035B556DBB3797DF");
-         result.test_eq("Hash 2", pipe.read_all_as_string(1), "610480FFA82F24F6926544B976FE387878E3D973C03DFD591C2E9896EFB903E0");
+         result.test_eq("Hash 1", pipe.read_all_as_string(0),
+                        "C00862D1C6C1CF7C1B49388306E7B3C1BB79D8D6EC978B41035B556DBB3797DF");
+         result.test_eq("Hash 2", pipe.read_all_as_string(1),
+                        "610480FFA82F24F6926544B976FE387878E3D973C03DFD591C2E9896EFB903E0");
+#endif
 
          return result;
          }
 
-#if defined(BOTAN_TARGET_OS_HAS_THREADS)
+
       Test::Result test_threaded_fork()
          {
          Test::Result result("Threaded_Fork");
 
-         Botan::Pipe pipe(new Botan::Threaded_Fork(new Botan::Hex_Encoder,
-                                                   new Botan::Base64_Encoder));
+#if defined(BOTAN_TARGET_OS_HAS_THREADS) && defined(BOTAN_HAS_CODEC_FILTERS) && defined(BOTAN_HAS_SHA2_32)
+         Botan::Pipe pipe(new Botan::Threaded_Fork(new Botan::Hex_Encoder, new Botan::Base64_Encoder));
 
          result.test_eq("Message count", pipe.message_count(), 0);
          pipe.process_msg("woo");
@@ -478,7 +541,9 @@ class Filter_Tests : public Test
          const size_t filter_count = 5;
          Botan::Filter* filters[filter_count];
          for(size_t i = 0; i != filter_count; ++i)
+            {
             filters[i] = new Botan::Hash_Filter("SHA-256");
+            }
 
          pipe.append(new Botan::Threaded_Fork(filters, filter_count));
 
@@ -492,15 +557,15 @@ class Filter_Tests : public Test
             }
          pipe.end_msg();
 
-         result.test_eq("Message count after end_msg", pipe.message_count(), 2+filter_count);
+         result.test_eq("Message count after end_msg", pipe.message_count(), 2 + filter_count);
          for(size_t i = 0; i != filter_count; ++i)
-            result.test_eq("Output " + std::to_string(i),
-                           pipe.read_all(2+i),
+            {
+            result.test_eq("Output " + std::to_string(i), pipe.read_all(2 + i),
                            "327AD8055223F5926693D8BEA40F7B35BDEEB535647DFB93F464E40EA01939A9");
-
+            }
+#endif
          return result;
          }
-#endif
 
    };
 
