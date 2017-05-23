@@ -7,9 +7,9 @@
 #include "tests.h"
 
 #if defined(BOTAN_HAS_X509_CERTIFICATES)
-  #include <botan/x509path.h>
-  #include <botan/calendar.h>
-  #include <botan/internal/filesystem.h>
+   #include <botan/x509path.h>
+   #include <botan/calendar.h>
+   #include <botan/internal/filesystem.h>
 #endif
 
 #include <algorithm>
@@ -30,7 +30,9 @@ std::map<std::string, std::string> read_results(const std::string& results_file)
    {
    std::ifstream in(results_file);
    if(!in.good())
+      {
       throw Test_Error("Failed reading " + results_file);
+      }
 
    std::map<std::string, std::string> m;
    std::string line;
@@ -38,14 +40,20 @@ std::map<std::string, std::string> read_results(const std::string& results_file)
       {
       std::getline(in, line);
       if(line == "")
+         {
          continue;
+         }
       if(line[0] == '#')
+         {
          continue;
+         }
 
       std::vector<std::string> parts = Botan::split_on(line, ':');
 
       if(parts.size() != 2)
+         {
          throw Test_Error("Invalid line " + line);
+         }
 
       m[parts[0]] = parts[1];
       }
@@ -72,7 +80,7 @@ class X509test_Path_Validation_Tests : public Test
          Botan::Certificate_Store_In_Memory trusted;
          trusted.add_certificate(root);
 
-         auto validation_time = Botan::calendar_point(2016,10,21,4,20,0).to_std_timepoint();
+         auto validation_time = Botan::calendar_point(2016, 10, 21, 4, 20, 0).to_std_timepoint();
 
          for(auto i = expected.begin(); i != expected.end(); ++i)
             {
@@ -85,15 +93,19 @@ class X509test_Path_Validation_Tests : public Test
                load_cert_file(Test::data_file("x509test/" + filename));
 
             if(certs.empty())
+               {
                throw Test_Error("Failed to read certs from " + filename);
+               }
 
             Botan::Path_Validation_Result path_result = Botan::x509_path_validate(
-               certs, restrictions, trusted,
-               "www.tls.test", Botan::Usage_Type::TLS_SERVER_AUTH,
-               validation_time);
+                     certs, restrictions, trusted,
+                     "www.tls.test", Botan::Usage_Type::TLS_SERVER_AUTH,
+                     validation_time);
 
             if(path_result.successful_validation() && path_result.trust_root() != root)
+               {
                path_result = Botan::Path_Validation_Result(Botan::Certificate_Status_Code::CANNOT_ESTABLISH_TRUST);
+               }
 
             result.test_eq("test " + filename, path_result.result_string(), expected_result);
             result.end_timer();
@@ -112,9 +124,10 @@ class X509test_Path_Validation_Tests : public Test
          std::vector<Botan::X509_Certificate> certs;
          while(!in.end_of_data())
             {
-            try {
-              certs.emplace_back(in);
-            }
+            try
+               {
+               certs.emplace_back(in);
+               }
             catch(Botan::Decoding_Error&) {}
             }
 
@@ -190,7 +203,7 @@ std::vector<Test::Result> NIST_Path_Validation_Tests::run()
       store.add_certificate(root_cert);
       store.add_crl(root_crl);
 
-      for(auto&& file : all_files)
+      for(auto const& file : all_files)
          {
          if(file.find(".crt") != std::string::npos && file != "end.crt")
             {
@@ -226,6 +239,84 @@ std::vector<Test::Result> NIST_Path_Validation_Tests::run()
    }
 
 BOTAN_REGISTER_TEST("x509_path_nist", NIST_Path_Validation_Tests);
+
+class Extended_Path_Validation_Tests : public Test
+   {
+   public:
+      std::vector<Test::Result> run() override;
+   };
+
+std::vector<Test::Result> Extended_Path_Validation_Tests::run()
+   {
+   std::vector<Test::Result> results;
+
+   const std::string extended_x509_test_dir = Test::data_dir() + "/extended_x509";
+
+   try
+      {
+      // Do nothing, just test filesystem access
+      Botan::get_files_recursive(extended_x509_test_dir);
+      }
+   catch(Botan::No_Filesystem_Access&)
+      {
+      Test::Result result("Extended x509 path validation");
+      result.test_note("Skipping due to missing filesystem access");
+      results.push_back(result);
+      return results;
+      }
+
+   std::map<std::string, std::string> expected =
+      read_results(Test::data_file("extended_x509/expected.txt"));
+
+   for(auto i = expected.begin(); i != expected.end(); ++i)
+      {
+      const std::string test_name = i->first;
+      const std::string expected_result = i->second;
+
+      const std::string test_dir = extended_x509_test_dir + "/" + test_name;
+
+      Test::Result result("Extended X509 path validation");
+      result.start_timer();
+
+      const std::vector<std::string> all_files = Botan::get_files_recursive(test_dir);
+
+      if(all_files.empty())
+         {
+         result.test_failure("No test files found in " + test_dir);
+         results.push_back(result);
+         continue;
+         }
+
+      Botan::Certificate_Store_In_Memory store;
+
+      for(auto const& file : all_files)
+         {
+         if(file.find(".crt") != std::string::npos && file != "end.crt")
+            {
+            store.add_certificate(Botan::X509_Certificate(file));
+            }
+         }
+
+      Botan::X509_Certificate end_user(test_dir + "/end.crt");
+
+      Botan::Path_Validation_Restrictions restrictions;
+      Botan::Path_Validation_Result validation_result =
+         Botan::x509_path_validate(end_user,
+                                   restrictions,
+                                   store);
+
+      result.test_eq(test_name + " path validation result",
+                     validation_result.result_string(),
+                     expected_result);
+
+      result.end_timer();
+      results.push_back(result);
+      }
+
+   return results;
+   }
+
+BOTAN_REGISTER_TEST("x509_path_extended", Extended_Path_Validation_Tests);
 
 #endif
 

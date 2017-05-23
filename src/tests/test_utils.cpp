@@ -1,19 +1,22 @@
 /*
 * (C) 2015 Jack Lloyd
 * (C) 2016 Daniel Neus, Rohde & Schwarz Cybersecurity
+* (C) 2017 René Korthaus, Rohde & Schwarz Cybersecurity
 *
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
 #include "tests.h"
 #include <functional>
+#include <ctime>
 #include <botan/loadstor.h>
 #include <botan/calendar.h>
 #include <botan/internal/rounding.h>
 #include <botan/charset.h>
+#include <botan/parsing.h>
 
 #if defined(BOTAN_HAS_BASE64_CODEC)
-  #include <botan/base64.h>
+   #include <botan/base64.h>
 #endif
 
 namespace Botan_Tests {
@@ -23,8 +26,7 @@ namespace {
 class Utility_Function_Tests : public Text_Based_Test
    {
    public:
-      Utility_Function_Tests() : Text_Based_Test("util.vec","In1,In2,Out")
-         {}
+      Utility_Function_Tests() : Text_Based_Test("util.vec", "In1,In2,Out") {}
 
       Test::Result run_one_test(const std::string& algo, const VarMap& vars) override
          {
@@ -178,17 +180,18 @@ BOTAN_REGISTER_TEST("util", Utility_Function_Tests);
 class Date_Format_Tests : public Text_Based_Test
    {
    public:
-      Date_Format_Tests() : Text_Based_Test("dates.vec", "Date")
-         {}
+      Date_Format_Tests() : Text_Based_Test("dates.vec", "Date") {}
 
       std::vector<uint32_t> parse_date(const std::string& s)
          {
          const std::vector<std::string> parts = Botan::split_on(s, ',');
          if(parts.size() != 6)
+            {
             throw Test_Error("Bad date format '" + s + "'");
+            }
 
          std::vector<uint32_t> u32s;
-         for(auto&& sub : parts)
+         for(auto const& sub : parts)
             {
             u32s.push_back(Botan::to_u32bit(sub));
             }
@@ -201,7 +204,7 @@ class Date_Format_Tests : public Text_Based_Test
 
          const std::vector<uint32_t> d = parse_date(get_req_str(vars, "Date"));
 
-         if(type == "valid" || type == "valid.not_std")
+         if(type == "valid" || type == "valid.not_std" || type == "valid.64_bit_time_t")
             {
             Botan::calendar_point c(d[0], d[1], d[2], d[3], d[4], d[5]);
             result.test_is_eq("year", c.year, d[0]);
@@ -211,7 +214,7 @@ class Date_Format_Tests : public Text_Based_Test
             result.test_is_eq("minute", c.minutes, d[4]);
             result.test_is_eq("second", c.seconds, d[5]);
 
-            if(type == "valid.not_std")
+            if(type == "valid.not_std" || (type == "valid.64_bit_time_t" && c.year > 2037 && sizeof(std::time_t) == 4))
                {
                result.test_throws("valid but out of std::timepoint range", [c]() { c.to_std_timepoint(); });
                }
@@ -228,8 +231,7 @@ class Date_Format_Tests : public Text_Based_Test
             }
          else if(type == "invalid")
             {
-            result.test_throws("invalid date",
-                               [d]() { Botan::calendar_point c(d[0], d[1], d[2], d[3], d[4], d[5]); });
+            result.test_throws("invalid date", [d]() { Botan::calendar_point c(d[0], d[1], d[2], d[3], d[4], d[5]); });
             }
          else
             {
@@ -334,8 +336,7 @@ BOTAN_REGISTER_TEST("base64", Base64_Tests);
 class Charset_Tests : public Text_Based_Test
    {
    public:
-      Charset_Tests() : Text_Based_Test("charset.vec", "In,Out")
-         {}
+      Charset_Tests() : Text_Based_Test("charset.vec", "In,Out") {}
 
       Test::Result run_one_test(const std::string& type, const VarMap& vars) override
          {
@@ -382,8 +383,8 @@ class Charset_Tests : public Text_Based_Test
             {
             // "abcdefŸabcdef"
             std::vector<uint8_t> input = { 0x00, 0x61, 0x00, 0x62, 0x00, 0x63, 0x00, 0x64, 0x00, 0x65, 0x00, 0x66, 0x01,
-                                        0x78, 0x00, 0x61, 0x00, 0x62, 0x00, 0x63, 0x00, 0x64, 0x00, 0x65, 0x00, 0x66
-                                      };
+                                           0x78, 0x00, 0x61, 0x00, 0x62, 0x00, 0x63, 0x00, 0x64, 0x00, 0x65, 0x00, 0x66
+                                         };
 
             Charset::transcode(std::string(input.begin(), input.end()),
                                Character_Set::LATIN1_CHARSET, Character_Set::UCS2_CHARSET);
@@ -410,8 +411,8 @@ class Charset_Tests : public Text_Based_Test
             {
             // "abcdefŸabcdef"
             std::vector<uint8_t> input = { 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0xC5,
-                                        0xB8, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66
-                                      };
+                                           0xB8, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66
+                                         };
 
             Charset::transcode(std::string(input.begin(), input.end()),
                                Character_Set::LATIN1_CHARSET, Character_Set::UTF8_CHARSET);
@@ -452,6 +453,32 @@ class Charset_Tests : public Text_Based_Test
    };
 
 BOTAN_REGISTER_TEST("charset", Charset_Tests);
+
+class Hostname_Tests : public Text_Based_Test
+   {
+   public:
+      Hostname_Tests() : Text_Based_Test("hostnames.vec", "Issued,Hostname")
+         {}
+
+      Test::Result run_one_test(const std::string& type, const VarMap& vars) override
+         {
+         using namespace Botan;
+
+         Test::Result result("Hostname");
+
+         const std::string issued = get_req_str(vars, "Issued");
+         const std::string hostname = get_req_str(vars, "Hostname");
+         const bool expected = (type == "Invalid") ? false : true;
+
+         const std::string what = hostname + ((expected == true) ?
+                                              " matches " : " does not match ") + issued;
+         result.test_eq(what, Botan::host_wildcard_match(issued, hostname), expected);
+
+         return result;
+         }
+   };
+
+BOTAN_REGISTER_TEST("hostname", Hostname_Tests);
 
 }
 

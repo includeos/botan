@@ -46,8 +46,6 @@ matrix:
   allow_failures:
     - os: linux
       env: BUILD_MODE="cross-win32"
-    - os: linux
-      env: BUILD_MODE="lint"
 
   exclude:
     # Skip GCC on OS X entirely
@@ -102,6 +100,11 @@ script:
 
 after_success:
   - ./src/scripts/ci/travis/after_success.sh
+
+# whitelist branches to avoid testing feature branches twice (as branch and as pull request)
+branches:
+  only:
+    - master
 
 notifications:
   email: botan-commits@lists.randombit.net

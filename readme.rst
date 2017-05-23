@@ -106,9 +106,9 @@ Version 2 requires a C++11 compiler; GCC 4.8 and later, Clang 3.5 and
 later, and MSVC 2015 are regularly tested.
 
 The latest 2.x release is
-`2.0.1 <https://botan.randombit.net/releases/Botan-2.0.1.tgz>`_
-`(sig) <https://botan.randombit.net/releases/Botan-2.0.1.tgz.asc>`_
-released on 2017-01-09
+`2.1.0 <https://botan.randombit.net/releases/Botan-2.1.0.tgz>`_
+`(sig) <https://botan.randombit.net/releases/Botan-2.1.0.tgz.asc>`_
+released on 2017-04-04
 
 Old Stable Release
 ----------------------------------------
@@ -119,9 +119,9 @@ critical security updates (with all support ending on 2018-1-1), and the
 developers do not recommend its use anymore.
 
 The latest 1.10 release is
-`1.10.15 <https://botan.randombit.net/releases/Botan-1.10.15.tgz>`_
-`(sig) <https://botan.randombit.net/releases/Botan-1.10.15.tgz.asc>`_
-released on 2017-01-12
+`1.10.16 <https://botan.randombit.net/releases/Botan-1.10.16.tgz>`_
+`(sig) <https://botan.randombit.net/releases/Botan-1.10.16.tgz.asc>`_
+released on 2017-04-04
 
 Find Enclosed
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -184,7 +184,7 @@ Other Useful Things
 * PBKDF2 password based key derivation
 * Password hashing function bcrypt and passhash9 (custom PBKDF scheme)
 * SRP-6a password authenticated key exchange
-* Key derivation functions including HKDF, KDF2, SP 800-108, SP 800-56C
+* Key derivation functions including HKDF, KDF2, SP 800-108, SP 800-56A, SP 800-56C
 * Format preserving encryption scheme FE1
 * Threshold secret sharing
 * RFC 3394 AES key wrap

@@ -19,15 +19,6 @@
 
 namespace Botan_Tests {
 
-namespace {
-
-std::vector<std::string> possible_pk_providers()
-   {
-   return { "base", "openssl", "tpm" };
-   }
-
-}
-
 void check_invalid_signatures(Test::Result& result,
                               Botan::PK_Verifier& verifier,
                               const std::vector<uint8_t>& message,
@@ -91,6 +82,11 @@ void check_invalid_ciphertexts(Test::Result& result,
                     " invalid ciphertexts, rejected " + std::to_string(ciphertext_rejected));
    }
 
+std::vector<std::string> PK_Test::possible_providers(const std::string&)
+   {
+   return Test::provider_filter({ "base", "openssl", "tpm" });
+   }
+
 Test::Result
 PK_Signature_Generation_Test::run_one_test(const std::string&, const VarMap& vars)
    {
@@ -115,7 +111,7 @@ PK_Signature_Generation_Test::run_one_test(const std::string&, const VarMap& var
 
    std::vector<std::unique_ptr<Botan::PK_Verifier>> verifiers;
 
-   for(std::string verify_provider : possible_pk_providers())
+   for(auto const& verify_provider : possible_providers(algo_name()))
       {
       std::unique_ptr<Botan::PK_Verifier> verifier;
 
@@ -135,7 +131,7 @@ PK_Signature_Generation_Test::run_one_test(const std::string&, const VarMap& var
       verifiers.push_back(std::move(verifier));
       }
 
-   for(auto&& sign_provider : possible_pk_providers())
+   for(auto const& sign_provider : possible_providers(algo_name()))
       {
       std::unique_ptr<Botan::RandomNumberGenerator> rng;
       if(vars.count("Nonce"))
@@ -189,7 +185,7 @@ PK_Signature_Verification_Test::run_one_test(const std::string&, const VarMap& v
 
    Test::Result result(algo_name() + "/" + padding + " signature verification");
 
-   for(auto&& verify_provider : possible_pk_providers())
+   for(auto const& verify_provider : possible_providers(algo_name()))
       {
       std::unique_ptr<Botan::PK_Verifier> verifier;
 
@@ -219,7 +215,7 @@ PK_Signature_NonVerification_Test::run_one_test(const std::string&, const VarMap
 
    Test::Result result(algo_name() + "/" + padding + " verify invalid signature");
 
-   for(auto&& verify_provider : possible_pk_providers())
+   for(auto const& verify_provider : possible_providers(algo_name()))
       {
       std::unique_ptr<Botan::PK_Verifier> verifier;
 
@@ -255,7 +251,7 @@ PK_Encryption_Decryption_Test::run_one_test(const std::string&, const VarMap& va
 
    std::vector<std::unique_ptr<Botan::PK_Decryptor>> decryptors;
 
-   for(auto&& dec_provider : possible_pk_providers())
+   for(auto const& dec_provider : possible_providers(algo_name()))
       {
       std::unique_ptr<Botan::PK_Decryptor> decryptor;
 
@@ -273,13 +269,13 @@ PK_Encryption_Decryption_Test::run_one_test(const std::string&, const VarMap& va
       }
 
 
-   for(auto&& enc_provider : possible_pk_providers())
+   for(auto const& enc_provider : possible_providers(algo_name()))
       {
       std::unique_ptr<Botan::PK_Encryptor> encryptor;
 
       try
          {
-         encryptor.reset(new Botan::PK_Encryptor_EME(*pubkey, Test::rng(),padding, enc_provider));
+         encryptor.reset(new Botan::PK_Encryptor_EME(*pubkey, Test::rng(), padding, enc_provider));
          }
       catch(Botan::Lookup_Error&)
          {
@@ -388,7 +384,7 @@ Test::Result PK_Key_Agreement_Test::run_one_test(const std::string& header, cons
 
    const size_t key_len = get_opt_sz(vars, "OutLen", 0);
 
-   for(auto&& provider : possible_pk_providers())
+   for(auto const& provider : possible_providers(algo_name()))
       {
       std::unique_ptr<Botan::PK_Key_Agreement> kas;
 
@@ -406,125 +402,143 @@ Test::Result PK_Key_Agreement_Test::run_one_test(const std::string& header, cons
    return result;
    }
 
+std::vector<std::string> PK_Key_Generation_Test::possible_providers(
+   const std::string& algo)
+   {
+   std::vector<std::string> pk_provider =
+      Botan::probe_provider_private_key(algo, { "base", "openssl", "tpm" });
+   return Test::provider_filter(pk_provider);
+   }
+
 std::vector<Test::Result> PK_Key_Generation_Test::run()
    {
    std::vector<Test::Result> results;
 
-   for(auto&& param : keygen_params())
+   for(auto const& param : keygen_params())
       {
       const std::string report_name = algo_name() + (param.empty() ? param : " " + param);
 
       Test::Result result(report_name + " keygen");
 
+      const std::vector<std::string> providers = possible_providers(algo_name());
+
+      if(providers.empty())
+         {
+         result.note_missing("provider key generation " + algo_name());
+         }
+
       result.start_timer();
-      std::unique_ptr<Botan::Private_Key> key_p =
-         Botan::create_private_key(algo_name(), Test::rng(), param);
-
-      const Botan::Private_Key& key = *key_p;
-
-      result.confirm("Key passes self tests", key.check_key(Test::rng(), true));
-
-      result.test_gte("Key has reasonable estimated strength (lower)", key.estimated_strength(), 64);
-      result.test_lt("Key has reasonable estimated strength (upper)", key.estimated_strength(), 512);
-
-      // Test PEM public key round trips OK
-      try
+      for(auto&& prov : providers)
          {
-         Botan::DataSource_Memory data_src(Botan::X509::PEM_encode(key));
-         std::unique_ptr<Botan::Public_Key> loaded(Botan::X509::load_key(data_src));
+         std::unique_ptr<Botan::Private_Key> key_p =
+            Botan::create_private_key(algo_name(), Test::rng(), param, prov);
 
-         result.confirm("recovered public key from private", loaded.get() != nullptr);
-         result.test_eq("public key has same type", loaded->algo_name(), key.algo_name());
-         result.test_eq("public key passes checks", loaded->check_key(Test::rng(), false), true);
+         const Botan::Private_Key& key = *key_p;
+
+         result.confirm("Key passes self tests", key.check_key(Test::rng(), true));
+
+         result.test_gte("Key has reasonable estimated strength (lower)", key.estimated_strength(), 64);
+         result.test_lt("Key has reasonable estimated strength (upper)", key.estimated_strength(), 512);
+
+         // Test PEM public key round trips OK
+         try
+            {
+            Botan::DataSource_Memory data_src(Botan::X509::PEM_encode(key));
+            std::unique_ptr<Botan::Public_Key> loaded(Botan::X509::load_key(data_src));
+
+            result.confirm("recovered public key from private", loaded.get() != nullptr);
+            result.test_eq("public key has same type", loaded->algo_name(), key.algo_name());
+            result.test_eq("public key passes checks", loaded->check_key(Test::rng(), false), true);
+            }
+         catch(std::exception& e)
+            {
+            result.test_failure("roundtrip PEM public key", e.what());
+            }
+
+         // Test DER public key round trips OK
+         try
+            {
+            Botan::DataSource_Memory data_src(Botan::X509::BER_encode(key));
+            std::unique_ptr<Botan::Public_Key> loaded(Botan::X509::load_key(data_src));
+
+            result.confirm("recovered public key from private", loaded.get() != nullptr);
+            result.test_eq("public key has same type", loaded->algo_name(), key.algo_name());
+            result.test_eq("public key passes checks", loaded->check_key(Test::rng(), false), true);
+            }
+         catch(std::exception& e)
+            {
+            result.test_failure("roundtrip BER public key", e.what());
+            }
+
+         // Test PEM private key round trips OK
+         try
+            {
+            Botan::DataSource_Memory data_src(Botan::PKCS8::PEM_encode(key));
+            std::unique_ptr<Botan::Private_Key> loaded(
+               Botan::PKCS8::load_key(data_src, Test::rng()));
+
+            result.confirm("recovered private key from PEM blob", loaded.get() != nullptr);
+            result.test_eq("reloaded key has same type", loaded->algo_name(), key.algo_name());
+            result.test_eq("private key passes checks", loaded->check_key(Test::rng(), false), true);
+            }
+         catch(std::exception& e)
+            {
+            result.test_failure("roundtrip PEM private key", e.what());
+            }
+
+         try
+            {
+            Botan::DataSource_Memory data_src(Botan::PKCS8::BER_encode(key));
+            std::unique_ptr<Botan::Public_Key> loaded(Botan::PKCS8::load_key(data_src, Test::rng()));
+
+            result.confirm("recovered public key from private", loaded.get() != nullptr);
+            result.test_eq("public key has same type", loaded->algo_name(), key.algo_name());
+            result.test_eq("public key passes checks", loaded->check_key(Test::rng(), false), true);
+            }
+         catch(std::exception& e)
+            {
+            result.test_failure("roundtrip BER private key", e.what());
+            }
+
+         const std::string passphrase = Test::random_password();
+
+         try
+            {
+            Botan::DataSource_Memory data_src(
+               Botan::PKCS8::PEM_encode(key, Test::rng(), passphrase,
+                                        std::chrono::milliseconds(10)));
+
+            std::unique_ptr<Botan::Private_Key> loaded(
+               Botan::PKCS8::load_key(data_src, Test::rng(), passphrase));
+
+            result.confirm("recovered private key from encrypted blob", loaded.get() != nullptr);
+            result.test_eq("reloaded key has same type", loaded->algo_name(), key.algo_name());
+            result.test_eq("private key passes checks", loaded->check_key(Test::rng(), false), true);
+            }
+         catch(std::exception& e)
+            {
+            result.test_failure("roundtrip encrypted PEM private key", e.what());
+            }
+
+         try
+            {
+            Botan::DataSource_Memory data_src(
+               Botan::PKCS8::BER_encode(key, Test::rng(), passphrase,
+                                        std::chrono::milliseconds(10)));
+
+            std::unique_ptr<Botan::Private_Key> loaded(
+               Botan::PKCS8::load_key(data_src, Test::rng(), passphrase));
+
+            result.confirm("recovered private key from BER blob", loaded.get() != nullptr);
+            result.test_eq("reloaded key has same type", loaded->algo_name(), key.algo_name());
+            result.test_eq("private key passes checks", loaded->check_key(Test::rng(), false), true);
+            }
+         catch(std::exception& e)
+            {
+            result.test_failure("roundtrip encrypted BER private key", e.what());
+            }
+
          }
-      catch(std::exception& e)
-         {
-         result.test_failure("roundtrip PEM public key", e.what());
-         }
-
-      // Test DER public key round trips OK
-      try
-         {
-         Botan::DataSource_Memory data_src(Botan::X509::BER_encode(key));
-         std::unique_ptr<Botan::Public_Key> loaded(Botan::X509::load_key(data_src));
-
-         result.confirm("recovered public key from private", loaded.get() != nullptr);
-         result.test_eq("public key has same type", loaded->algo_name(), key.algo_name());
-         result.test_eq("public key passes checks", loaded->check_key(Test::rng(), false), true);
-         }
-      catch(std::exception& e)
-         {
-         result.test_failure("roundtrip BER public key", e.what());
-         }
-
-      // Test PEM private key round trips OK
-      try
-         {
-         Botan::DataSource_Memory data_src(Botan::PKCS8::PEM_encode(key));
-         std::unique_ptr<Botan::Private_Key> loaded(
-            Botan::PKCS8::load_key(data_src, Test::rng()));
-
-         result.confirm("recovered private key from PEM blob", loaded.get() != nullptr);
-         result.test_eq("reloaded key has same type", loaded->algo_name(), key.algo_name());
-         result.test_eq("private key passes checks", loaded->check_key(Test::rng(), false), true);
-         }
-      catch(std::exception& e)
-         {
-         result.test_failure("roundtrip PEM private key", e.what());
-         }
-
-      try
-         {
-         Botan::DataSource_Memory data_src(Botan::PKCS8::BER_encode(key));
-         std::unique_ptr<Botan::Public_Key> loaded(Botan::PKCS8::load_key(data_src, Test::rng()));
-
-         result.confirm("recovered public key from private", loaded.get() != nullptr);
-         result.test_eq("public key has same type", loaded->algo_name(), key.algo_name());
-         result.test_eq("public key passes checks", loaded->check_key(Test::rng(), false), true);
-         }
-      catch(std::exception& e)
-         {
-         result.test_failure("roundtrip BER private key", e.what());
-         }
-
-      const std::string passphrase = Test::random_password();
-
-      try
-         {
-         Botan::DataSource_Memory data_src(
-            Botan::PKCS8::PEM_encode(key, Test::rng(), passphrase,
-                                     std::chrono::milliseconds(10)));
-
-         std::unique_ptr<Botan::Private_Key> loaded(
-            Botan::PKCS8::load_key(data_src, Test::rng(), passphrase));
-
-         result.confirm("recovered private key from encrypted blob", loaded.get() != nullptr);
-         result.test_eq("reloaded key has same type", loaded->algo_name(), key.algo_name());
-         result.test_eq("private key passes checks", loaded->check_key(Test::rng(), false), true);
-         }
-      catch(std::exception& e)
-         {
-         result.test_failure("roundtrip encrypted PEM private key", e.what());
-         }
-
-      try
-         {
-         Botan::DataSource_Memory data_src(
-            Botan::PKCS8::BER_encode(key, Test::rng(), passphrase,
-                                     std::chrono::milliseconds(10)));
-
-         std::unique_ptr<Botan::Private_Key> loaded(
-            Botan::PKCS8::load_key(data_src, Test::rng(), passphrase));
-
-         result.confirm("recovered private key from BER blob", loaded.get() != nullptr);
-         result.test_eq("reloaded key has same type", loaded->algo_name(), key.algo_name());
-         result.test_eq("private key passes checks", loaded->check_key(Test::rng(), false), true);
-         }
-      catch(std::exception& e)
-         {
-         result.test_failure("roundtrip encrypted BER private key", e.what());
-         }
-
       result.end_timer();
 
       results.push_back(result);

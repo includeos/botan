@@ -4,11 +4,12 @@ FFI Interface
 
 .. versionadded:: 1.11.14
 
-Botan's ffi module provides a C API intended to be easily usable with
-other language's foreign function interface (FFI) libraries. For
-instance the Python module using the FFI interface needs only the
-ctypes module (included in default Python). Code examples can be found
-in `src/tests/test_ffi.cpp`.
+Botan's ffi module provides a C89 API intended to be easily usable with other
+language's foreign function interface (FFI) libraries. For instance the included
+Python module uses the ``ctypes`` module for all library access. This API is of
+course also useful for programs written directly in C.
+
+Code examples can be found in `src/tests/test_ffi.cpp`.
 
 Versioning
 ----------------------------------------
@@ -87,6 +88,50 @@ Random Number Generators
 .. cpp:function:: int botan_rng_destroy(botan_rng_t rng)
 
    Destroy the object created by :cpp:func:`botan_rng_init`.
+
+Block Ciphers
+----------------------------------------
+
+This is a 'raw' interface to ECB mode block ciphers. Most applications
+want the higher level cipher API which provides authenticated
+encryption. This API exists as an escape hatch for applications which
+need to implement custom primitives using a PRP.
+
+.. cpp:type:: opaque* botan_block_cipher_t
+
+   An opauqe data type for a block cipher. Don't mess with it.
+
+.. cpp:function:: int botan_block_cipher_init(botan_block_cipher_t* bc, const char* cipher_name)
+
+   Create a new cipher mode object, `cipher_name` should be for example "AES-128" or "Threefish-512"
+
+.. cpp:function:: int botan_block_cipher_block_size(botan_block_cipher_t bc)
+
+   Return the block size of this cipher.
+
+.. cpp:function:: int botan_block_cipher_clear(botan_block_cipher_t bc)
+
+   Clear the internal state (such as keys) of this cipher object, but do not deallocate it.
+
+.. cpp:function:: int botan_block_cipher_set_key(botan_block_cipher_t bc, const uint8_t key[], size_t key_len)
+
+   Set the cipher key, which is required before encrypting or decrypting.
+
+.. cpp:function:: int botan_block_cipher_encrypt_blocks(botan_block_cipher_t bc, const uint8_t in[], uint8_t out[], size_t blocks)
+
+   The key must have been set first with
+   Encrypt *blocks* blocks of data stored in *in* and place the ciphertext into *out*.
+   The two parameters may be the same buffer, but must not overlap.
+
+.. cpp:function:: int botan_block_cipher_decrypt_blocks(botan_block_cipher_t bc, const uint8_t in[], uint8_t out[], size_t blocks)
+
+   Decrypt *blocks* blocks of data stored in *in* and place the ciphertext into *out*.
+   The two parameters may be the same buffer, but must not overlap.
+
+.. cpp:function:: int botan_block_cipher_destroy(botan_block_cipher_t rng)
+
+   Destroy the object created by :cpp:func:`botan_block_cipher_init`.
+
 
 Hash Functions
 ----------------------------------------
@@ -233,6 +278,176 @@ KDF
    Derive a key using the given KDF algorithm, e.g., "SP800-56C".
    The derived key of length *out_len* bytes will be placed in *out*.
 
+Multiple Precision Integers
+----------------------------------------
+
+.. versionadded: 2.1.0
+
+.. cpp:type:: opaque* botan_mp_t
+
+   An opaque data type for a multiple precision integer. Don't mess with it.
+
+.. cpp:function:: int botan_mp_init(botan_mp_t* mp)
+
+   Initialize a ``botan_mp_t``. Initial value is zero, use `botan_mp_set_X` to load a value.
+
+.. cpp:function:: int botan_mp_destroy(botan_mp_t mp)
+
+   Free a ``botan_mp_t``
+
+.. cpp:function:: int botan_mp_to_hex(botan_mp_t mp, char* out)
+
+   Writes exactly ``botan_mp_num_bytes(mp)*2 + 1`` bytes to out
+
+.. cpp:function:: int botan_mp_to_str(botan_mp_t mp, uint8_t base, char* out, size_t* out_len)
+
+   Base can be either 10 or 16.
+
+.. cpp:function:: int botan_mp_set_from_int(botan_mp_t mp, int initial_value)
+
+   Set ``botan_mp_t`` from an integer value.
+
+.. cpp:function:: int botan_mp_set_from_mp(botan_mp_t dest, botan_mp_t source)
+
+   Set ``botan_mp_t`` from another MP.
+
+.. cpp:function:: int botan_mp_set_from_str(botan_mp_t dest, const char* str)
+
+   Set ``botan_mp_t`` from a string. Leading prefix of "0x" is accepted.
+
+.. cpp:function:: int botan_mp_num_bits(botan_mp_t n, size_t* bits)
+
+   Return the size of ``n`` in bits.
+
+.. cpp:function:: int botan_mp_num_bytes(botan_mp_t n, size_t* bytes)
+
+   Return the size of ``n`` in bytes.
+
+.. cpp:function:: int botan_mp_to_bin(botan_mp_t mp, uint8_t vec[])
+
+   Writes exactly ``botan_mp_num_bytes(mp)`` to ``vec``.
+
+.. cpp:function:: int botan_mp_from_bin(botan_mp_t mp, const uint8_t vec[], size_t vec_len)
+
+   Loads ``botan_mp_t`` from a binary vector (as produced by ``botan_mp_to_bin``).
+
+.. cpp:function:: int botan_mp_is_negative(botan_mp_t mp)
+
+   Return 1 if ``mp`` is negative, otherwise 0.
+
+.. cpp:function:: int botan_mp_flip_sign(botan_mp_t mp)
+
+   Flip the sign of ``mp``.
+
+.. cpp:function:: int botan_mp_add(botan_mp_t result, botan_mp_t x, botan_mp_t y)
+
+   Add two ``botan_mp_t``s and store the output in ``result``.
+
+.. cpp:function:: int botan_mp_sub(botan_mp_t result, botan_mp_t x, botan_mp_t y)
+
+   Subtract two ``botan_mp_t``s and store the output in ``result``.
+
+.. cpp:function:: int botan_mp_mul(botan_mp_t result, botan_mp_t x, botan_mp_t y)
+
+   Multiply two ``botan_mp_t``s and store the output in ``result``.
+
+.. cpp:function:: int botan_mp_div(botan_mp_t quotient, botan_mp_t remainder, \
+                           botan_mp_t x, botan_mp_t y)
+
+   Divide ``x`` by ``y`` and store the output in ``quotient`` and ``remainder``.
+
+.. cpp:function:: int botan_mp_mod_mul(botan_mp_t result, botan_mp_t x, botan_mp_t y, botan_mp_t mod)
+
+   Set ``result`` to ``x`` times ``y`` modulo ``mod``.
+
+.. cpp:function:: int botan_mp_equal(botan_mp_t x, botan_mp_t y)
+
+   Return 1 if ``x`` is equal to ``y``, 0 if ``x`` is not equal to ``y``
+
+.. cpp:function:: int botan_mp_is_zero(const botan_mp_t x)
+
+   Return 1 if ``x`` is equal to zero, otherwise 0.
+
+.. cpp:function:: int botan_mp_is_odd(const botan_mp_t x)
+
+   Return 1 if ``x`` is odd, otherwise 0.
+
+.. cpp:function:: int botan_mp_is_even(const botan_mp_t x)
+
+   Return 1 if ``x`` is even, otherwise 0.
+
+.. cpp:function:: int botan_mp_is_positive(const botan_mp_t x)
+
+   Return 1 if ``x`` is greater than or equal to zero.
+
+.. cpp:function:: int botan_mp_is_negative(const botan_mp_t x)
+
+   Return 1 if ``x`` is less than zero.
+
+.. cpp:function:: int botan_mp_to_uint32(const botan_mp_t x, uint32_t* val)
+
+   If x fits in a 32-bit integer, set val to it and return 0. If x is out of
+   range an error is returned.
+
+.. cpp:function:: int botan_mp_cmp(int* result, botan_mp_t x, botan_mp_t y)
+
+   Three way comparison: set result to -1 if ``x`` is less than ``y``,
+   0 if ``x`` is equal to ``y``, and 1 if ``x`` is greater than ``y``.
+
+.. cpp:function:: int botan_mp_swap(botan_mp_t x, botan_mp_t y)
+
+   Swap two ``botan_mp_t`` values.
+
+.. cpp:function:: int botan_mp_powmod(botan_mp_t out, botan_mp_t base, botan_mp_t exponent, botan_mp_t modulus)
+
+   Modular exponentiation.
+
+.. cpp:function:: int botan_mp_lshift(botan_mp_t out, botan_mp_t in, size_t shift)
+
+   Left shift by specified bit count, place result in ``out``.
+
+.. cpp:function:: int botan_mp_rshift(botan_mp_t out, botan_mp_t in, size_t shift)
+
+   Right shift by specified bit count, place result in ``out``.
+
+.. cpp:function:: int botan_mp_mod_inverse(botan_mp_t out, botan_mp_t in, botan_mp_t modulus)
+
+   Compute modular inverse. If no modular inverse exists (for instance because ``in`` and
+   ``modulus`` are not relatively prime), then sets ``out`` to -1.
+
+.. cpp:function:: int botan_mp_rand_bits(botan_mp_t rand_out, botan_rng_t rng, size_t bits)
+
+   Create a random ``botan_mp_t`` of the specified bit size.
+
+.. cpp:function:: int botan_mp_rand_range(botan_mp_t rand_out, botan_rng_t rng, \
+                                  botan_mp_t lower_bound, botan_mp_t upper_bound)
+
+   Create a random ``botan_mp_t`` within the provided range.
+
+.. cpp:function:: int botan_mp_gcd(botan_mp_t out, botan_mp_t x, botan_mp_t y)
+
+   Compute the greated common divisor of ``x`` and ``y``.
+
+.. cpp:function:: int botan_mp_is_prime(botan_mp_t n, botan_rng_t rng, size_t test_prob)
+
+   Test if ``n`` is prime. The algorithm used (Miller-Rabin) is probabalistic,
+   set ``test_prob`` to the desired assurance level. For example if
+   ``test_prob`` is 64, then sufficient Miller-Rabin iterations will run to
+   assure there is at most a ``1/2**64`` chance that ``n`` is composit.
+
+.. cpp:function:: int botan_mp_get_bit(botan_mp_t n, size_t bit)
+
+   Returns 0 if the specified bit of ``n`` is not set, 1 if it is set.
+
+.. cpp:function:: int botan_mp_set_bit(botan_mp_t n, size_t bit)
+
+   Set the specified bit of ``n``
+
+.. cpp:function:: int botan_mp_clear_bit(botan_mp_t n, size_t bit)
+
+   Clears the specified bit of ``n``
+
+
 Password Hashing
 ----------------------------------------
 
@@ -290,6 +505,36 @@ Public Key Creation, Import and Export
                                              const char* encryption_algo, \
                                              uint32_t flags)
 
+   Deprecated, use ``botan_privkey_export_encrypted_msec`` or ``botan_privkey_export_encrypted_iter``
+
+.. cpp::function:: int botan_privkey_export_encrypted_pbkdf_msec(botan_privkey_t key,
+                                                        uint8_t out[], size_t* out_len, \
+                                                        botan_rng_t rng, \
+                                                        const char* passphrase, \
+                                                        uint32_t pbkdf_msec_runtime, \
+                                                        size_t* pbkdf_iterations_out, \
+                                                        const char* cipher_algo, \
+                                                        const char* pbkdf_algo, \
+                                                        uint32_t flags);
+
+    Encrypt a key, running the key derivation function for ``pbkdf_msec_runtime`` milliseconds.
+    Returns the number of iterations used in ``pbkdf_iterations_out``.
+
+    ``cipher_algo`` must specify a CBC mode cipher (such as "AES-128/CBC") or as
+    a Botan-specific extension a GCM mode may be used.
+
+.. cpp::function:: int botan_privkey_export_encrypted_pbkdf_iter(botan_privkey_t key, \
+                                                        uint8_t out[], size_t* out_len, \
+                                                        botan_rng_t rng, \
+                                                        const char* passphrase, \
+                                                        size_t pbkdf_iterations, \
+                                                        const char* cipher_algo, \
+                                                        const char* pbkdf_algo, \
+                                                        uint32_t flags);
+
+   Encrypt a private key. The PBKDF function runs for the specified number of iterations.
+   At least 100,000 is recommended.
+
 .. cpp:type:: opaque* botan_pubkey_t
 
    An opaque data type for a public key. Don't mess with it.
@@ -308,6 +553,88 @@ Public Key Creation, Import and Export
                                        uint8_t out[], size_t* out_len)
 
 .. cpp:function:: int botan_pubkey_destroy(botan_pubkey_t key)
+
+.. cpp:function:: int botan_pubkey_get_field(botan_mp_t output, \
+                                     botan_pubkey_t key, \
+                                     const char* field_name)
+
+    Read an algorithm specific field from the public key object, placing it into output.
+    For exampe "n" or "e" for RSA keys or "p", "q", "g", and "y" for DSA keys.
+
+.. cpp:function:: int botan_privkey_get_field(botan_mp_t output, \
+                                      botan_privkey_t key, \
+                                      const char* field_name)
+
+    Read an algorithm specific field from the private key object, placing it into output.
+    For exampe "p" or "q" for RSA keys, or "x" for DSA keys or ECC keys.
+
+
+RSA specific functions
+----------------------------------------
+
+.. cpp:function:: int botan_privkey_rsa_get_p(botan_mp_t p, botan_privkey_t rsa_key)
+
+   Set ``p`` to the first RSA prime.
+
+.. cpp:function:: int botan_privkey_rsa_get_q(botan_mp_t q, botan_privkey_t rsa_key)
+
+   Set ``q`` to the second RSA prime.
+
+.. cpp:function:: int botan_privkey_rsa_get_d(botan_mp_t d, botan_privkey_t rsa_key)
+
+   Set ``d`` to the RSA private exponent.
+
+.. cpp:function:: int botan_privkey_rsa_get_n(botan_mp_t n, botan_privkey_t rsa_key)
+
+   Set ``n`` to the RSA modulus.
+
+.. cpp:function:: int botan_privkey_rsa_get_e(botan_mp_t e, botan_privkey_t rsa_key)
+
+   Set ``e`` to the RSA public exponent.
+
+.. cpp:function:: int botan_pubkey_rsa_get_e(botan_mp_t e, botan_pubkey_t rsa_key)
+
+   Set ``e`` to the RSA public exponent.
+
+.. cpp:function:: int botan_pubkey_rsa_get_n(botan_mp_t n, botan_pubkey_t rsa_key)
+
+   Set ``n`` to the RSA modulus.
+
+.. cpp:function:: int botan_privkey_load_rsa(botan_privkey_t* key, \
+                                     botan_mp_t p, botan_mp_t q, botan_mp_t e)
+
+   Initialize a private RSA key using parameters p, q, and e.
+
+.. cpp:function:: int botan_pubkey_load_rsa(botan_pubkey_t* key, \
+                                    botan_mp_t n, botan_mp_t e)
+
+   Initialize a public RSA key using parameters n and e.
+
+DSA specific functions
+----------------------------------------
+
+.. cpp:function:: int botan_privkey_load_dsa(botan_privkey_t* key, \
+                                     botan_mp_t p, botan_mp_t q, botan_mp_t g, botan_mp_t x)
+
+   Initialize a private DSA key using group parameters p, q, and g and private key x.
+
+.. cpp:function:: int botan_pubkey_load_dsa(botan_pubkey_t* key, \
+                                     botan_mp_t p, botan_mp_t q, botan_mp_t g, botan_mp_t y)
+
+   Initialize a private DSA key using group parameters p, q, and g and public key y.
+
+ElGamal specific functions
+----------------------------------------
+
+.. cpp:function:: int botan_privkey_load_elgamal(botan_privkey_t* key, \
+                                     botan_mp_t p, botan_mp_t g, botan_mp_t x)
+
+   Initialize a private ElGamal key using group parameters p and g and private key x.
+
+.. cpp:function:: int botan_pubkey_load_elgamal(botan_pubkey_t* key, \
+                                     botan_mp_t p, botan_mp_t g, botan_mp_t y)
+
+   Initialize a private ElGamal key using group parameters p and g and public key y.
 
 Public Key Encryption/Decryption
 ----------------------------------------

@@ -61,10 +61,11 @@ we might see lines like::
    INFO: Skipping, requires external dependency - boost bzip2 lzma sqlite3 tpm
 
 The ones that are skipped because they are require an external
-depedency have to be explicitly asked for, because they rely on third
+dependency have to be explicitly asked for, because they rely on third
 party libraries which your system might not have or that you might not
 want the resulting binary to depend on. For instance to enable zlib
 support, add ``--with-zlib`` to your invocation of ``configure.py``.
+All available modules can be listed with ``--list-modules``.
 
 You can control which algorithms and modules are built using the
 options ``--enable-modules=MODS`` and ``--disable-modules=MODS``, for
@@ -84,7 +85,16 @@ For instance::
 will set up a build that only includes RSA, OAEP, PSS along with any
 required dependencies. A small subset of core features, including AES,
 SHA-2, HMAC, and the multiple precision integer library, are always
-loaded.
+loaded. Note that a minimized build does not include any random number
+generator, which is needed for example to generate keys, nonces and IVs.
+See :doc:`rng` on which random number generators are available.
+
+The option ``--module-policy=POL`` enables modules required by and
+disables modules prohibited by a text policy in ``src/build-data/policy``.
+Additional modules can be enabled if not prohibited by the policy.
+Currently available policies include ``bsi``, ``nist`` and ``modern``::
+
+ $ ./configure.py --module-policy=bsi --enable-modules=tls,xts
 
 The script tries to guess what kind of makefile to generate, and it
 almost always guesses correctly (basically, Visual C++ uses NMAKE with
@@ -256,7 +266,7 @@ To generate the amalgamation, run ``configure.py`` with whatever
 options you would ordinarily use, along with the option
 ``--amalgamation``. This will create two (rather large) files,
 ``botan_all.h`` and ``botan_all.cpp``, plus (unless the option
-``--single-amalgmation-file`` is used) also some number of files like
+``--single-amalgamation-file`` is used) also some number of files like
 ``botan_all_aesni.cpp`` and ``botan_all_sse2.cpp`` which need to be
 compiled with the appropriate compiler flags to enable that
 instruction set. The ISA specific files are only generated if there is
@@ -305,6 +315,7 @@ by the user using
 
  - ``--with-openssl`` adds an engine that uses OpenSSL for some public
    key operations and ciphers/hashes. OpenSSL 1.0.1 or later is supported.
+   LibreSSL is API compatible with OpenSSL and can be used instead.
 
 Multiple Builds
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

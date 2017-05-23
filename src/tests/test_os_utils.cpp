@@ -7,10 +7,11 @@
 
 #include "tests.h"
 #include <botan/internal/os_utils.h>
+#include <thread>
 
 // For __ud2 intrinsic
 #if defined(BOTAN_TARGET_COMPILER_IS_MSVC)
-  #include <intrin.h>
+   #include <intrin.h>
 #endif
 
 namespace Botan_Tests {
@@ -72,14 +73,18 @@ class OS_Utils_Tests : public Test
          const uint64_t proc_ts1 = Botan::OS::get_processor_timestamp();
 
          // do something that consumes a little time
-         Botan::OS::get_process_id();
+         std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
          uint64_t proc_ts2 = Botan::OS::get_processor_timestamp();
 
          if(proc_ts1 == 0)
+            {
             result.test_is_eq("Disabled processor timestamp stays at zero", proc_ts1, proc_ts2);
+            }
          else
+            {
             result.confirm("Processor timestamp does not duplicate", proc_ts1 != proc_ts2);
+            }
 
          return result;
          }
@@ -146,10 +151,6 @@ class OS_Utils_Tests : public Test
 
          result.confirm("Correct result returned by working probe fn", run_rc == 5);
 
-         std::function<int ()> throw_fn = []() -> int { throw 3.14159; return 5; };
-         const int throw_rc = Botan::OS::run_cpu_instruction_probe(throw_fn);
-         result.confirm("Error return if probe function threw exception", throw_rc < 0);
-
          std::function<int ()> crash_probe;
 
 #if defined(BOTAN_TARGET_COMPILER_IS_MSVC)
@@ -183,7 +184,7 @@ class OS_Utils_Tests : public Test
 
          return result;
          }
-};
+   };
 
 BOTAN_REGISTER_TEST("os_utils", OS_Utils_Tests);
 

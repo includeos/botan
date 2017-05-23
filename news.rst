@@ -1,6 +1,162 @@
 Release Notes
 ========================================
 
+Version 2.2.0, Not Yet Released
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Add the SM3 hash function
+
+* Avoid recursion in BER_Decoder::get_next_object which could cause
+  stack exhaustion. (GH #989)
+
+* Fix missing flush in DataSink_Stream::end_msg. (GH #972 fixing GH #972)
+
+* Allow to seek in the big endian counter mode of operation (GH #999)
+
+* Add SP 800-56A KDF (GH #1040)
+
+* Support loading ElGamal keys through FFI interface (GH #1008)
+
+* Many changes to configure.py and botan2.py to make them pylint clean
+  (GH #1041 #1002 #984)
+
+* Add `hmac` command line util (GH #1001)
+
+* Add `hex_enc` and `hex_dec` command line utils
+
+* Fix return value of FFI botan_bcrypt_is_valid (GH #1033)
+
+* Support generating RSA keys using OpenSSL (GH #1035)
+
+* Add new FFI function botan_hash_block_size (GH #1036)
+
+* Support AES-CBC ciphers via OpenSSL (GH #1022)
+
+* Complete wildcard handling for X.509 certificates (GH #1017)
+
+* Add some missing functions to TLS::Text_Policy (GH #1023)
+
+* It was previously possible to use `--single-amalgamation-file`
+  without `--amalgamation`, though it did not do anything useful. Now
+  `--single-amalgamation-file` requires `--amalgamation` also be set
+  on the command line.
+
+Version 2.1.0, 2017-04-04
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Fix incorrect truncation in Bcrypt. Passwords in length between 56 and 72
+  characters were truncated at 56 characters. Found and reported by Solar Designer.
+  (CVE-2017-7252) (GH #938)
+
+* Fix a bug in X509 DN string comparisons that could result in out of bound
+  reads. This could result in information leakage, denial of service, or
+  potentially incorrect certificate validation results. Found independently
+  by Cisco Talos team and OSS-Fuzz. (CVE-2017-2801)
+
+* Correct minimum work factor for Bcrypt password hashes. All other
+  implementations require the work factor be at least 4. Previously Botan simply
+  required it be greater than zero. (GH #938)
+
+* Converge on a single side channel silent EC blinded multiply algorithm.
+  Uses Montgomery ladder with order/2 bits scalar blinding and point randomization
+  now by default. (GH #893)
+
+* Add ability to search for certificates using the SHA-256 of the distinguished name.
+  (GH #900)
+
+* Support a 0-length IV in ChaCha stream cipher. Such an IV is treated
+  identically to an 8-byte IV of all zeros.
+
+* Add new interfaces to the C API including multiple precision integers, key
+  validity tests, block ciphers, and extracting algorithm specific key paramters
+  (such as the modulus and public exponent from RSA public keys). GH #899 #944
+  #946 #961 #964
+
+* The PKCS11 module did not require any external dependencies, so it
+  has been enabled by default. The ``--with-pkcs11`` and ``--without-pkcs11``
+  flags to ``configure.py`` have been removed. PKCS11 can still be disabled
+  using ``--disable-modules=pkcs11`` (GH #837)
+
+* Add ``OS::run_cpu_instruction_probe`` for runtime probing of ISA extensions.
+  Supporting this requires system-specific techniques, currently Windows SEH and
+  Unix signal handling are supported.
+
+* Add support for ARM NEON in the SIMD_4x32 type
+
+* Add support for ARM CPU feature detection using getauxval (GH #843)
+
+* Previously Botan forbid any use of times past 2037 to avoid Y2038 issues.
+  Now this restriction is only in place on systems which have a 32-bit
+  ``time_t``. (GH #933 fixing #917)
+
+* Add generic type decoder function to BER decoder (GH #897)
+
+* Fix portability or build problems affecting Sun Studio compiler (GH #846),
+  Solaris, ppc64le, DragonflyBSD (GH #887)
+
+* Add ``--with-external-libdir`` to configure.py (GH #857 fixing #19 #767)
+
+* Add ``OS::get_high_resolution_clock`` which returns the best resolution
+  clock available on the system.
+
+* Change ``OS::get_processor_timestamp`` to return 0 if no hardware
+  cycle counter is available. Previously it silently fell back on some
+  other clock type.
+
+* Report cycles/byte in the output of ``botan speed``.
+
+* Add speed tests for modular exponentiations and ECC scalar multiplies.
+
+* Avoid using IP address for SNI in ``tls_client``. (GH #942)
+
+* Add command line util ``timing_test`` which enables running
+  timing-based side channel analysis of TLS CBC decryption, ECC scalar
+  multiplies, OAEP decoding, and other operations which are prone to
+  providing an oracle via side channel. This replaces the standalone
+  timing test suite added in 1.11.34, which has been removed.
+
+* Various cleanups and refactorings (GH #965)
+
+* Add wrapper of C++14 make_unique (GH #974)
+
+* Fix pkg-config output when --build-dir was used (GH #936)
+
+* Make it possible to disable `-fstack-protector` using a build-time flag.
+  GH #863
+
+* Add tests for TLS DSA ciphersuites, more Noekeon tests, others.
+
+* Avoid a GCC warning that triggered on the public key types (GH #849)
+
+* Fix various warnings flagged by pylint and pyflakes linters in
+  configure.py and botan.py (GH #832 #836 #839 #962 #975)
+
+* Improve support for OpenBSD including using getentropy (GH #954)
+  for PRNG seeding, and arc4random to access system RNG (GH #953)
+
+* Add ability to build through CMake. As of now this is only supported
+  for development rather than production builds. (GH #967)
+
+* Rename python wrapper to botan2.py (GH #847)
+
+* Change name constraint test to use a fixed reference time. Test certs have expired.
+
+* Increase Miller-Rabin iterations for DSA primes to match FIPS 186-4. (GH #881)
+
+* Fix possible ISO 9796-2 padding side channel, and add a missing length check (GH #891)
+
+* In command line utility, prefer the system RNG if it is available.
+
+Version 1.10.16, 2017-04-04
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Fix a bug in X509 DN string comparisons that could result in out of bound
+  reads. This could result in information leakage, denial of service, or
+  potentially incorrect certificate validation results. (CVE-2017-2801)
+
+* Avoid throwing during a destructor since this is undefined in C++11
+  and rarely a good idea. (GH #930)
+
 Version 1.10.15, 2017-01-12
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
