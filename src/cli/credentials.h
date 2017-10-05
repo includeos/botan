@@ -4,13 +4,13 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef EXAMPLE_CREDENTIALS_MANAGER_H__
-#define EXAMPLE_CREDENTIALS_MANAGER_H__
+#ifndef EXAMPLE_CREDENTIALS_MANAGER_H_
+#define EXAMPLE_CREDENTIALS_MANAGER_H_
 
 #include <botan/pkcs8.h>
 #include <botan/credentials_manager.h>
 #include <botan/x509self.h>
-#include <iostream>
+#include <botan/data_src.h>
 #include <fstream>
 #include <memory>
 
@@ -50,9 +50,8 @@ class Basic_Credentials_Manager : public Botan::Credentials_Manager
                {
                cert.certs.push_back(Botan::X509_Certificate(in));
                }
-            catch(std::exception& e)
+            catch(std::exception&)
                {
-
                }
             }
 
@@ -74,9 +73,8 @@ class Basic_Credentials_Manager : public Botan::Credentials_Manager
                m_certstores.push_back(cs);
                }
             }
-         catch(std::exception& e)
+         catch(std::exception&)
             {
-            //std::cout << e.what() << "\n";
             }
          }
 

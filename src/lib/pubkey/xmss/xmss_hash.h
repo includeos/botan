@@ -5,15 +5,10 @@
  * Botan is released under the Simplified BSD License (see license.txt)
  **/
 
-#ifndef BOTAN_XMSS_HASH_H__
-#define BOTAN_XMSS_HASH_H__
+#ifndef BOTAN_XMSS_HASH_H_
+#define BOTAN_XMSS_HASH_H_
 
-#include <cstddef>
-#include <string>
-#include <botan/assert.h>
 #include <botan/hash.h>
-#include <botan/secmem.h>
-#include <botan/types.h>
 
 namespace Botan {
 

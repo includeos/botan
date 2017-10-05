@@ -6,11 +6,9 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_P11_RSA_H__
-#define BOTAN_P11_RSA_H__
+#ifndef BOTAN_P11_RSA_H_
+#define BOTAN_P11_RSA_H_
 
-#include <botan/build.h>
-#include <botan/p11.h>
 #include <botan/p11_session.h>
 #include <botan/p11_object.h>
 
@@ -22,7 +20,7 @@ namespace Botan {
 namespace PKCS11 {
 
 /// Properties for generating a PKCS#11 RSA public key
-class BOTAN_DLL RSA_PublicKeyGenerationProperties final : public PublicKeyProperties
+class BOTAN_PUBLIC_API(2,0) RSA_PublicKeyGenerationProperties final : public PublicKeyProperties
    {
    public:
       /// @param bits length in bits of modulus n
@@ -38,7 +36,7 @@ class BOTAN_DLL RSA_PublicKeyGenerationProperties final : public PublicKeyProper
    };
 
 /// Properties for importing a PKCS#11 RSA public key
-class BOTAN_DLL RSA_PublicKeyImportProperties final : public PublicKeyProperties
+class BOTAN_PUBLIC_API(2,0) RSA_PublicKeyImportProperties final : public PublicKeyProperties
    {
    public:
       /// @param modulus modulus n
@@ -64,7 +62,7 @@ class BOTAN_DLL RSA_PublicKeyImportProperties final : public PublicKeyProperties
    };
 
 /// Represents a PKCS#11 RSA public key
-class BOTAN_DLL PKCS11_RSA_PublicKey final : public RSA_PublicKey,
+class BOTAN_PUBLIC_API(2,0) PKCS11_RSA_PublicKey : public RSA_PublicKey,
    public Object
    {
    public:
@@ -95,7 +93,7 @@ class BOTAN_DLL PKCS11_RSA_PublicKey final : public RSA_PublicKey,
    };
 
 /// Properties for importing a PKCS#11 RSA private key
-class BOTAN_DLL RSA_PrivateKeyImportProperties final : public PrivateKeyProperties
+class BOTAN_PUBLIC_API(2,0) RSA_PrivateKeyImportProperties final : public PrivateKeyProperties
    {
    public:
       /**
@@ -160,7 +158,7 @@ class BOTAN_DLL RSA_PrivateKeyImportProperties final : public PrivateKeyProperti
    };
 
 /// Properties for generating a PKCS#11 RSA private key
-class BOTAN_DLL RSA_PrivateKeyGenerationProperties final : public PrivateKeyProperties
+class BOTAN_PUBLIC_API(2,0) RSA_PrivateKeyGenerationProperties final : public PrivateKeyProperties
    {
    public:
       RSA_PrivateKeyGenerationProperties()
@@ -171,7 +169,7 @@ class BOTAN_DLL RSA_PrivateKeyGenerationProperties final : public PrivateKeyProp
    };
 
 /// Represents a PKCS#11 RSA private key
-class BOTAN_DLL PKCS11_RSA_PrivateKey final : public Private_Key,
+class BOTAN_PUBLIC_API(2,0) PKCS11_RSA_PrivateKey final : public Private_Key,
    public RSA_PublicKey,
    public Object
    {
@@ -190,7 +188,7 @@ class BOTAN_DLL PKCS11_RSA_PrivateKey final : public Private_Key,
 
       /**
       * Generates a PKCS#11 RSA private key
-      * @param session
+      * @param session the session to use
       * @param bits length in bits of modulus n
       * @param priv_key_props the properties of the RSA private key
       * @note no persistent public key object will be created
@@ -221,7 +219,7 @@ using PKCS11_RSA_KeyPair = std::pair<PKCS11_RSA_PublicKey, PKCS11_RSA_PrivateKey
 * @param pub_props properties of the public key
 * @param priv_props properties of the private key
 */
-BOTAN_DLL PKCS11_RSA_KeyPair generate_rsa_keypair(Session& session, const RSA_PublicKeyGenerationProperties& pub_props,
+BOTAN_PUBLIC_API(2,0) PKCS11_RSA_KeyPair generate_rsa_keypair(Session& session, const RSA_PublicKeyGenerationProperties& pub_props,
       const RSA_PrivateKeyGenerationProperties& priv_props);
 }
 

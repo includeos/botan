@@ -8,9 +8,7 @@
 #include <botan/pkcs10.h>
 #include <botan/x509_ext.h>
 #include <botan/x509cert.h>
-#include <botan/der_enc.h>
 #include <botan/ber_dec.h>
-#include <botan/parsing.h>
 #include <botan/oids.h>
 #include <botan/pem.h>
 
@@ -50,7 +48,7 @@ PKCS10_Request::PKCS10_Request(const std::vector<uint8_t>& in) :
 */
 void PKCS10_Request::force_decode()
    {
-   BER_Decoder cert_req_info(m_tbs_bits);
+   BER_Decoder cert_req_info(signed_body());
 
    size_t version;
    cert_req_info.decode(version);

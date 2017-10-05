@@ -1,10 +1,296 @@
 Release Notes
 ========================================
 
-Version 2.2.0, Not Yet Released
+Version 2.4.0, Not Yet Released
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* Add the SM3 hash function
+
+Version 2.3.0, 2017-10-02
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Address a side channel affecting modular exponentiation. An attacker
+  capable of a local or cross-VM cache analysis attack may be able
+  to recover bits of secret exponents as used in RSA, DH, etc.
+  CVE-2017-14737
+
+* Add the SHACAL2 block cipher, including optimizations using SIMD and SHA-NI
+  instructions. (GH #1151)
+
+* Add the ARIA block cipher (GH #1004 and #1157)
+
+* Add support for the ARMv8 AES instructions (GH #1182 and #1146)
+
+* Add support for the ARMv8 PMULL instruction (GH #1181 and #842)
+
+* On macOS and iOS the ``System_RNG`` class is now implemented using ``arc4random``.
+  Previously the system RNG class was not available on iOS. (GH #1219)
+
+* Optimized the CMAC polynomial doubling operation, and removed a small timing
+  channel due to a conditional operation.
+
+* Added support for the ECDHE_PSK AEAD TLS ciphersuites from
+  draft-ietf-tls-ecdhe-psk-aead-05.
+
+* SM2 encryption and signature schemes were previously hardcoded to use SM3
+  hash, now any hash is allowed. (GH #1188)
+
+* SM2 encryption in 2.2.0 followed an obsolete version of the standard. The
+  format of the ciphertext changed in a more recent revision of the standard,
+  and now uses an ASN.1 encoding. Botan has changed to reflect this format,
+  which is compatible with GmSSL (GH #1218)
+
+* OCB mode now supports 192, 256 and 512 bit block ciphers. (GH #1205)
+
+* XTS mode now supports 256-bit and 512-bit block ciphers.
+
+* Add ids to allow SHA-3 signatures with PKCSv1.5 (GH #1184)
+
+* Add support for ``PSSR_Raw`` signatures which PSS sign an externally derived
+  hash. (GH #1212 #1211)
+
+* GCM now supports truncated tags in the range 96...128 bits. GCM had
+  previously supported 64-bit truncated tags, but these are known to
+  be insecure and are now deprecated. (GH #1210 #1207)
+
+* Add a new TLS policy hook ``allow_client_initiated_renegotiation`` which is the
+  parallel of the existing ``allow_server_initiated_renegotiation``. If set to
+  false, servers will reject attempts by the client to renegotiation the
+  session, instead sending a ``no_renegotiation`` warning alert. Note that the
+  default is ``false``, ie that client renegotiation is now prohibited by default.
+  (GH #872)
+
+* Add HKDF-Expand-Label function which is used in TLS v1.3 and QUIC protocols.
+  (GH #1226)
+
+* Fix decoding of ECC keys that use extensions from RFC 5915 (GH #1208)
+
+* The entropy source that called CryptGenRandom has been removed, and
+  replaced by a version which invokes the system PRNG, which may
+  be CryptGenRandom or some other source. (GH #1180)
+
+* Add support for gathering entropy using the Crypt-NG BCryptGenRandom
+  API. This is necessary to build for Windows Phone/Windows Store. (GH #1180)
+
+* Extend "Raw" signature padding (which allows signing a hash computed
+  externally) to optionally take a hash function name. In this case, it will be
+  verified that the input matches the expected hash size.  This also will
+  control the hash algorithm used for RFC 6979 deterministic nonces; previously
+  SHA-512 was always used for RFC 6979 nonces with "Raw". (GH #1153)
+
+* The advertised FFI API version has increased. This should have happened
+  already in 2.2 but was neglected. The ``botan_ffi_supports_api`` call will
+  return true for either the current or older versions of the API version since
+  no backwards incompatible changes have occurred.
+
+* Add new C89 API functions ``botan_hex_decode``, ``botan_base64_encode``,
+  ``botan_base64_decode``, ``botan_constant_time_compare``.
+
+* Add new C89 API functions ``botan_privkey_load_dh``, ``botan_pubkey_load_dh``,
+  and ``botan_privkey_create_dh`` (GH #1155)
+
+* Add ``is_passhash9_alg_supported`` (GH #1154)
+
+* The ``power_mod`` function now supports negative bases (GH #1179 #1168)
+
+* Add a new command line utility for examining TLS client hellos.
+
+* Added a new target for LLVM bitcode (GH #1169)
+
+* Improve support for Windows Phone (GH #1180 #796 #794)
+
+* Correct return value of ``botan_pk_op_verify_finish``. In 2.2.0 this function
+  returned -1 on invalid signature, instead of 1 which was used in 2.0, 2.1, and
+  now again in 2.3. (GH #1189 #1187)
+
+* Allow loading unencrypted private keys via FFI API (GH #1197)
+
+* Add new command line options ``--rng-type=drbg`` and ``--drbg-seed`` which
+  allow running commands with a deterministic RNG. (GH #1169)
+
+* Fix a number of warnings seen under Visual C++ (GH #1171 #795)
+
+* Workaround a GCC 7 bug that caused miscompilation of the GOST-34.11 hash
+  function on x86-32. (GH #882 #1148)
+
+* Fix a bug in SIMD_4x32 which affected little-endian PowerPC processors.
+  This would cause test failures for Serpent, among other problems.
+
+* Fix Altivec runtime detection, which was broken starting in Botan 2.1.0
+
+* Optimized the verification of TLS CBC padding bytes. Previously the check
+  examined every byte of the record, even though at most 256 bytes of padding
+  may be appended. (GH #1227)
+
+* Simplified definition of ``Botan::secure_allocator``. In particular, not
+  defining the ``construct`` and ``destroy`` methods avoids a performance problem
+  under MSVC. (GH #1228 and #1229)
+
+* The ``secure_allocator`` class now uses ``calloc`` and ``free`` instead of
+  ``new`` and ``delete``. In addition the actual allocation operation is hidden
+  inside of compiled functions, which significantly reduces code size. (GH #1231)
+
+* The ``secure_scrub_memory`` function now uses ``explicit_bzero`` on OpenBSD.
+
+* Previously ARM feature detection (NEON, AES, ...) relied on getauxval, which
+  is only supported on Linux and Android. Now iOS is supported, by checking the
+  model name/version and matching it against known versions. Unfortunately this
+  is the best available technique on iOS. On Aarch64 systems that are not iOS or
+  Linux/Android, a technique based on trial execution while catching SIGILL is
+  used. (GH #1213)
+
+* The output of ``botan config libs`` was incorrect, it produced ``-lbotan-2.X``
+  where X is the minor version, instead of the actual lib name ``-lbotan-2``.
+
+* Add ``constant_time_compare`` as better named equivalent of ``same_mem``.
+
+* Silence a Clang warning in ``create_private_key`` (GH #1150)
+
+* The fuzzers have been better integrated with the main build. See the
+  handbook for details. (GH #1158)
+
+* The Travis CI and AppVeyor CI builds are now run via a Python script. This
+  makes it easier to replicate the behavior of the CI build locally. Also a
+  number of changes were made to improve the turnaround time of CI builds.
+  (GH #1162 #1199)
+
+* Add support for Win32 filesystem operation, so the tests pass completely
+  on MinGW now (GH #1203)
+
+* Added a script to automate running TLS-Attacker tests.
+
+* The distribution script now creates reproducible outputs, by
+  forcing all modification times, uids, etc to values fixed by the release date.
+  (GH #1217)
+
+* The ``BOTAN_DLL`` macro has been split up into ``BOTAN_PUBLIC_API``,
+  ``BOTAN_UNSTABLE_API`` and ``BOTAN_TEST_API`` which allows
+  indicating in the header the API stability of the export. All three
+  are defined as ``BOTAN_DLL`` so overriding just that macro continues
+  to work as before. (GH #1216)
+
+* Optimize ``bigint_divop`` when a double-word type is available. (GH #494)
+
+* Fix several memory leaks in the tests. Additionally a false positive
+  leak seen under ``valgrind`` in the ``fork`` tests for the RNG was resolved.
+
+* Export ``CurveGFp_Repr`` type (only used internally) to resolve a
+  long standing UBSan warning. (GH #453)
+
+* Now ``-fstack-protector`` and similar flags that affect linking are exported
+  in ``botan config ldflags`` as they already were in the ``pkg-config`` output.
+  (GH #863)
+
+* Remove double underscore in header guards to avoid using names
+  reserved by ISO C++. (GH #512)
+
+* Additions to the SRP documentation (GH #1029)
+
+* The package transform (in ``package.h``) is now deprecated, and will be
+  removed in a future release. (GH #1215)
+
+* Add more tests for the const-time utils (GH #1214)
+
+* Fix a bug in FFI tests that caused the test files not to be found when using
+  ``--data-dir`` option (GH #1149)
+
+* C++ ``final`` annotations have been added to classes which are not
+  intended for derivation. This keyword was already in use but was not
+  applied consistently.
+
+* A typedef ``SecureVector`` has been added for the ``secure_vector`` type.
+  This makes porting code from 1.10 to 2.x API slightly simpler.
+
+* Header files have been cleaned up to remove unnecessary inclusions. In some
+  cases it may be required to include additional botan headers to get all the
+  declarations that were previously visible. For example, ``bigint.h`` no longer
+  includes ``rng.h``, but just forward declares ``RandomNumberGenerator``.
+
+* Improved support for IBM xlc compiler.
+
+Version 1.10.17, 2017-10-02
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Address a side channel affecting modular exponentiation. An attacker
+  capable of a local or cross-VM cache analysis attack may be able
+  to recover bits of secret exponents as used in RSA, DH, etc.
+  CVE-2017-14737
+
+* Workaround a miscompilation bug in GCC 7 on x86-32 affecting GOST-34.11
+  hash function. (GH #1192 #1148 #882)
+
+* Add SecureVector::data() function which returns the start of the
+  buffer. This makes it slightly simpler to support both 1.10 and 2.x
+  APIs in the same codebase.
+
+* When compiled by a C++11 (or later) compiler, a template typedef of
+  SecureVector, secure_vector, is added. In 2.x this class is a
+  std::vector with a custom allocator, so has a somewhat different
+  interface than SecureVector in 1.10. But this makes it slightly
+  simpler to support both 1.10 and 2.x APIs in the same codebase.
+
+* Fix a bug that prevented `configure.py` from running under Python3
+
+* Botan 1.10.x does not support the OpenSSL 1.1 API. Now the build
+  will `#error` if OpenSSL 1.1 is detected. Avoid `--with-openssl`
+  if compiling against 1.1 or later. (GH #753)
+
+* Import patches from Debian adding basic support for building on
+  aarch64, ppc64le, or1k, and mipsn32 platforms.
+
+Version 2.2.0, 2017-08-07
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Add the Ed25519 signature scheme (GH #1066)
+
+* The format of x25519 keys, which previously used a non-standard encoding,
+  has changed to match the upcoming IETF specification. (GH #1076)
+
+* Add the SM2 signature scheme (GH #1082)
+
+* Add the SM2 public key encryption scheme (GH #1142)
+
+* Add the SM3 hash function (GH #996)
+
+* Add the Streebog (GOST R 34.11-2012) hash function (GH #1114)
+
+* Add the SM4 block cipher (GH #1080)
+
+* Add the PGP S2K algorithm (GH #1060)
+
+* Add SP 800-56A KDF (GH #1040)
+
+* Add ChaCha_RNG which is a very fast and completely non-standard
+  random bit generator (GH #1137)
+
+* Add support for SHA-1 and SHA-2 instructions added in Intel Goldmont
+  (GH #826)
+
+* Add support for SHA-1 and SHA-2 instructions added in ARMv8 (GH #844)
+
+* Add support for HOTP (RFC 4226) and TOTP (RFC 6238)
+  one-time-password algorithms (GH #1054)
+
+* Fix a bug that caused secure_allocator to not fully zeroize blocks
+  when sizeof(T) was greater than 1.
+
+* Add HashFunction::copy_state which allows efficiently computing the
+  hash of several messages with a common prefix (GH #1056 #1037)
+
+* ECC keys now encode their parameters using an OID instead of a literal
+  encoding of the domain parameters. This will lead to smaller public and
+  private keys in most instances. (GH #1093)
+
+* The OpenSSL backend now supports the 1.1.0 API (GH #1056)
+
+* Add a preliminary provider using BearSSL, currently EC and hashes supported
+  (GH #1094)
+
+* Fix a bug in certificate path length checking that could cause valid
+  chains to be rejected. (GH #1053)
+
+* It is possible for CBC, CFB, and stream ciphers to carry over the
+  nonce from the previous message, which is needed by some applications.
+  This worked in 1.10 but broke in 2.0. (GH #1044 fixing GH #864)
 
 * Avoid recursion in BER_Decoder::get_next_object which could cause
   stack exhaustion. (GH #989)
@@ -13,32 +299,47 @@ Version 2.2.0, Not Yet Released
 
 * Allow to seek in the big endian counter mode of operation (GH #999)
 
-* Add SP 800-56A KDF (GH #1040)
-
 * Support loading ElGamal keys through FFI interface (GH #1008)
+
+* Support Windows sockets in ``http_util`` (allowing OCSP checks on Windows),
+  as well as in the TLS command line utils (GH #1138).
+
+* The ``--destdir`` flag to ``configure.py`` has been removed. Instead use
+  the ``DESTDIR`` environment variable at install time. This change was
+  done to more closely match how autoconf handles this case.
+  (GH #1139 #1111 #997 #996).
 
 * Many changes to configure.py and botan2.py to make them pylint clean
   (GH #1041 #1002 #984)
 
-* Add `hmac` command line util (GH #1001)
+* Add command line utils ``hmac`` (GH #1001), ``encryption`` (GH #359),
+  ``hex_enc``, and ``hex_dec``.
 
-* Add `hex_enc` and `hex_dec` command line utils
+* Fix an error in ``sign_cert`` command line util, which ignored the
+  ``--ca-key-pass`` option. (GH #1106)
+
+* The ``speed`` util can now benchmark multiple buffer sizes (GH #1084)
 
 * Fix return value of FFI botan_bcrypt_is_valid (GH #1033)
 
 * Support generating RSA keys using OpenSSL (GH #1035)
 
-* Add new FFI function botan_hash_block_size (GH #1036)
+* Add new FFI functions botan_hash_block_size (GH #1036),
+  botan_hash_copy_state (GH #1059), botan_scrub_mem
+
+* Add support for RFC 3394 keywrap through FFI (GH #1135)
 
 * Support AES-CBC ciphers via OpenSSL (GH #1022)
+
+* Add function to return certificates included in OCSP response (GH #1123)
 
 * Complete wildcard handling for X.509 certificates (GH #1017)
 
 * Add some missing functions to TLS::Text_Policy (GH #1023)
 
-* It was previously possible to use `--single-amalgamation-file`
-  without `--amalgamation`, though it did not do anything useful. Now
-  `--single-amalgamation-file` requires `--amalgamation` also be set
+* It was previously possible to use ``--single-amalgamation-file``
+  without ``--amalgamation``, though it did not do anything useful. Now
+  ``--single-amalgamation-file`` requires ``--amalgamation`` also be set
   on the command line.
 
 Version 2.1.0, 2017-04-04
@@ -68,7 +369,7 @@ Version 2.1.0, 2017-04-04
   identically to an 8-byte IV of all zeros.
 
 * Add new interfaces to the C API including multiple precision integers, key
-  validity tests, block ciphers, and extracting algorithm specific key paramters
+  validity tests, block ciphers, and extracting algorithm specific key parameters
   (such as the modulus and public exponent from RSA public keys). GH #899 #944
   #946 #961 #964
 
@@ -221,7 +522,7 @@ Version 2.0.0, 2017-01-06
 
 * The default TLS policy now requires 2048 or larger DH groups by default.
 
-* Add BSI_TR_02102_2 TLS::Policy subclass representing BSI TR-02102-2 recomendations.
+* Add BSI_TR_02102_2 TLS::Policy subclass representing BSI TR-02102-2 recommendations.
 
 * The default Path_Validation_Restrictions constructor has changed to
   require at least 110 bit signature strength. This means 1024 bit RSA
@@ -4554,5 +4855,3 @@ Version 0.7.0, 2001-03-01
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 * First public release
-
-

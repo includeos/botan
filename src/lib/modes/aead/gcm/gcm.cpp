@@ -7,12 +7,16 @@
 */
 
 #include <botan/gcm.h>
+#include <botan/block_cipher.h>
 #include <botan/internal/ct_utils.h>
 #include <botan/loadstor.h>
 #include <botan/ctr.h>
 
 #if defined(BOTAN_HAS_GCM_CLMUL)
   #include <botan/internal/clmul.h>
+  #include <botan/cpuid.h>
+#elif defined(BOTAN_HAS_GCM_PMULL)
+  #include <botan/internal/pmull.h>
   #include <botan/cpuid.h>
 #endif
 
@@ -25,6 +29,9 @@ void GHASH::gcm_multiply(secure_vector<uint8_t>& x) const
 #if defined(BOTAN_HAS_GCM_CLMUL)
    if(CPUID::has_clmul())
       return gcm_multiply_clmul(x.data(), m_H.data());
+#elif defined(BOTAN_HAS_GCM_PMULL)
+   if(CPUID::has_arm_pmull())
+      return gcm_multiply_pmull(x.data(), m_H.data());
 #endif
 
    static const uint64_t R = 0xE100000000000000;
@@ -176,9 +183,13 @@ GCM_Mode::GCM_Mode(BlockCipher* cipher, size_t tag_size) :
 
    m_ctr.reset(new CTR_BE(cipher, 4)); // CTR_BE takes ownership of cipher
 
-   if(m_tag_size != 8 && m_tag_size != GCM_BS)
+   /* We allow any of the values 128, 120, 112, 104, or 96 bits as a tag size */
+   /* 64 bit tag is still supported but deprecated and will be removed in the future */
+   if(m_tag_size != 8 && (m_tag_size < 12 || m_tag_size > 16))
       throw Invalid_Argument(name() + ": Bad tag size " + std::to_string(m_tag_size));
    }
+
+GCM_Mode::~GCM_Mode() { /* for unique_ptr */ }
 
 void GCM_Mode::clear()
    {
@@ -309,7 +320,7 @@ void GCM_Decryption::finish(secure_vector<uint8_t>& buffer, size_t offset)
 
    const uint8_t* included_tag = &buffer[remaining+offset];
 
-   if(!same_mem(mac.data(), included_tag, tag_size()))
+   if(!constant_time_compare(mac.data(), included_tag, tag_size()))
       throw Integrity_Failure("GCM tag check failed");
 
    buffer.resize(offset + remaining);

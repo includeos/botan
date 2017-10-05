@@ -11,7 +11,6 @@
 #if defined(BOTAN_HAS_ECDH)
 
 #include <botan/internal/p11_mechanism.h>
-#include <botan/ber_dec.h>
 #include <botan/der_enc.h>
 #include <botan/pk_ops.h>
 #include <botan/rng.h>
@@ -39,7 +38,7 @@ secure_vector<uint8_t> PKCS11_ECDH_PrivateKey::private_key_bits() const
    }
 
 namespace {
-class PKCS11_ECDH_KA_Operation : public PK_Ops::Key_Agreement
+class PKCS11_ECDH_KA_Operation final : public PK_Ops::Key_Agreement
    {
    public:
       PKCS11_ECDH_KA_Operation(const PKCS11_EC_PrivateKey& key, const std::string& params)

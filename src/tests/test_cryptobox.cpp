@@ -17,38 +17,52 @@ namespace {
 
 #if defined(BOTAN_HAS_CRYPTO_BOX)
 
-class Cryptobox_Tests : public Test
+class Cryptobox_Tests final : public Test
    {
    public:
       std::vector<Test::Result> run() override
          {
-         std::vector<Test::Result> results;
          Test::Result result("cryptobox");
 
-         const std::vector<uint8_t> msg = Botan::hex_decode("AABBCC");
-         const std::string password = "secret";
-
-         std::string ciphertext = Botan::CryptoBox::encrypt(msg.data(), msg.size(),
-                                  password,
-                                  Test::rng());
-
-         try
+         for(size_t i = 0; i <= 128; i += 7)
             {
-            std::string plaintext = Botan::CryptoBox::decrypt(ciphertext, password);
+            const std::string password = Test::random_password();
+            const std::vector<uint8_t> input = unlock(Test::rng().random_vec(i));
 
-            const uint8_t* pt_b = reinterpret_cast<const uint8_t*>(plaintext.data());
+            const std::string ciphertext =
+               Botan::CryptoBox::encrypt(input.data(), input.size(), password, Test::rng());
 
-            std::vector<uint8_t> pt_vec(pt_b, pt_b + plaintext.size());
+            // First verify decryption works
+            try
+               {
+               const Botan::secure_vector<uint8_t> decrypted =
+                  Botan::CryptoBox::decrypt_bin(ciphertext, password);
+               result.test_eq("decrypt", decrypted, input);
+               }
+            catch(std::exception& e)
+               {
+               result.test_failure("cryptobox decrypt", e.what());
+               }
 
-            result.test_eq("decrypt", pt_vec, msg);
+            // Now corrupt a bit and ensure it fails
+            try
+               {
+               std::string corrupted = ciphertext;
+               corrupted[corrupted.size()/2]++;
+               Botan::CryptoBox::decrypt(corrupted, password);
+               result.test_failure("Decrypted corrupted cryptobox message");
+               }
+            catch(Botan::Decoding_Error)
+               {
+               result.test_success("Rejected corrupted cryptobox message");
+               }
+            catch(Botan::Invalid_Argument)
+               {
+               result.test_success("Rejected corrupted cryptobox message");
+               }
             }
-         catch(std::exception& e)
-            {
-            result.test_failure("cryptobox decrypt", e.what());
-            }
 
-         results.push_back(result);
-         return results;
+         return {result};
          }
    };
 

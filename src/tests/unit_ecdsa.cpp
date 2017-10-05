@@ -19,6 +19,7 @@
    #include <botan/oids.h>
    #include <botan/pkcs8.h>
    #include <botan/hash.h>
+   #include <botan/data_src.h>
 #endif
 
 #if defined(BOTAN_HAS_X509_CERTIFICATES)
@@ -48,7 +49,7 @@ Test::Result test_hash_larger_than_n()
    Botan::ECDSA_PrivateKey priv_key(Test::rng(), dom_pars);
 
    std::vector<uint8_t> message(20);
-   std::iota(message.begin(), message.end(), 0);
+   std::iota(message.begin(), message.end(), static_cast<uint8_t>(0));
 
    auto sha1 = Botan::HashFunction::create("SHA-1");
    auto sha224 = Botan::HashFunction::create("SHA-224");
@@ -370,20 +371,42 @@ Test::Result test_ecc_key_with_rfc5915_extensions()
       std::unique_ptr<Botan::Private_Key> pkcs8(
          Botan::PKCS8::load_key(Test::data_file("ecc/ecc_private_with_rfc5915_ext.pem"), Test::rng()));
 
-      result.confirm("loaded RFC 5914 key", pkcs8.get());
+      result.confirm("loaded RFC 5915 key", pkcs8.get());
       result.test_eq("key is ECDSA", pkcs8->algo_name(), "ECDSA");
       result.confirm("key type is ECDSA", dynamic_cast<Botan::ECDSA_PrivateKey*>(pkcs8.get()));
       }
    catch(std::exception& e)
       {
-      result.test_failure("load_rfc5915", e.what());
+      result.test_failure("load_rfc5915_ext", e.what());
+      }
+
+   return result;
+   }
+
+Test::Result test_ecc_key_with_rfc5915_parameters()
+   {
+   Test::Result result("ECDSA Unit");
+
+   try
+      {
+      std::unique_ptr<Botan::Private_Key> pkcs8(
+         Botan::PKCS8::load_key(Test::data_file("ecc/ecc_private_with_rfc5915_parameters.pem"), Test::rng()));
+
+      result.confirm("loaded RFC 5915 key", pkcs8.get());
+      result.test_eq("key is ECDSA", pkcs8->algo_name(), "ECDSA");
+      result.confirm("key type is ECDSA", dynamic_cast<Botan::ECDSA_PrivateKey*>(pkcs8.get()));
+      }
+   catch(std::exception& e)
+      {
+      result.test_failure("load_rfc5915_params", e.what());
       }
 
    return result;
    }
 
 
-class ECDSA_Unit_Tests : public Test
+
+class ECDSA_Unit_Tests final : public Test
    {
    public:
       std::vector<Test::Result> run() override
@@ -402,6 +425,7 @@ class ECDSA_Unit_Tests : public Test
          results.push_back(test_unusual_curve());
          results.push_back(test_curve_registry());
          results.push_back(test_ecc_key_with_rfc5915_extensions());
+         results.push_back(test_ecc_key_with_rfc5915_parameters());
          return results;
          }
    };

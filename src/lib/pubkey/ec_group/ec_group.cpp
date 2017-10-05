@@ -21,7 +21,9 @@ EC_Group::EC_Group(const OID& domain_oid)
    const std::string pem = PEM_for_named_group(OIDS::lookup(domain_oid));
 
    if(pem == "")
-      throw Lookup_Error("No ECC domain data for " + domain_oid.as_string());
+      {
+      throw Lookup_Error("No ECC domain data for '" + domain_oid.as_string() + "'");
+      }
 
    *this = EC_Group(pem);
    m_oid = domain_oid.as_string();
@@ -118,7 +120,13 @@ EC_Group::DER_encode(EC_Group_Encoding form) const
          .get_contents_unlocked();
       }
    else if(form == EC_DOMPAR_ENC_OID)
+      {
+      if(get_oid().empty())
+         {
+         throw Encoding_Error("Cannot encode EC_Group as OID because OID not set");
+         }
       return DER_Encoder().encode(OID(get_oid())).get_contents_unlocked();
+      }
    else if(form == EC_DOMPAR_ENC_IMPLICITCA)
       return DER_Encoder().encode_null().get_contents_unlocked();
    else

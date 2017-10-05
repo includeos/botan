@@ -10,6 +10,11 @@
 
 namespace Botan {
 
+std::unique_ptr<HashFunction> SHA_160::copy_state() const
+   {
+   return std::unique_ptr<HashFunction>(new SHA_160(*this));
+   }
+
 namespace SHA1_F {
 
 namespace {
@@ -65,6 +70,13 @@ void SHA_160::compress_n(const uint8_t input[], size_t blocks)
    if(CPUID::has_intel_sha())
       {
       return sha1_compress_x86(m_digest, input, blocks);
+      }
+#endif
+
+#if defined(BOTAN_HAS_SHA1_ARMV8)
+   if(CPUID::has_arm_sha1())
+      {
+      return sha1_armv8_compress_n(m_digest, input, blocks);
       }
 #endif
 

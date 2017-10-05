@@ -17,24 +17,28 @@ Ciphers, Hashes, PBKDF
 * Serpent using AVX2 or SSSE3/pshufb
 * ChaCha20 using AVX2, NEON
 * XSalsa20-Poly1305 AEAD compatible with NaCl
-* ARIA block cipher (RFCs 5794 and 6209)
 * ASCON 1.2 (CAESAR)
 * NORX-64 3.0 (CAESAR)
 * scrypt PBKDF
 * Argon2 PBKDF (draft-irtf-cfrg-argon2)
 * bcrypt PBKDF
 * Skein-MAC
+* PMAC
 * Extend Cascade_Cipher to support arbitrary number of ciphers
+* EME* tweakable block cipher (https://eprint.iacr.org/2004/125.pdf)
 
 Public Key Crypto, Math
 ----------------------------------------
 
 * Curves for pairings (BN-256 is widely implemented)
 * Identity based encryption
+* BBS group signatures
+* Paillier homomorphic cryptosystem
+* Hashing onto an elliptic curve
 * SPHINCS-256
-* Ed25519 / EdDSA (GH #283)
-* Ed448-Goldilocks
+* X448 and Ed448
 * FHMQV
+* Use GLV decomposition to speed up secp256k1 operations
 * Support mixed hashes and non-empty param strings in OAEP
 * wNAF ECC point multiply
 * Recover ECDSA public key from signature/message pair (GH #664)
@@ -43,6 +47,18 @@ Public Key Crypto, Math
 * Some PK operations, especially RSA, have extensive computations per
   operation setup but many of the computed values depend only on the
   key and could be shared across operation objects.
+
+Utility Functions
+------------------
+
+* base58 and base32 encoding
+
+Multiparty Protocols
+----------------------
+
+* Distributed key generation for DL, RSA
+* Threshold signing, decryption
+* Socialist Millionaires Protocol
 
 External Providers, Hardware Support
 ----------------------------------------
@@ -53,7 +69,6 @@ External Providers, Hardware Support
 * /dev/crypto provider (ciphers, hashes)
 * Windows CryptoAPI provider (ciphers, hashes, RSA)
 * Apple CommonCrypto
-* ARMv8-A crypto extensions (AES, SHA-2)
 * POWER8 crypto extensions (AES, SHA-2)
 * Better TPM support: NVRAM, PCR measurements, sealing
 * Intel SGX support
@@ -89,8 +104,7 @@ PKIX
 * OCSP responder logic
 * X.509 attribute certificates (RFC 5755)
 * Support generating/verifying XMSS certificates
-* Roughtime client (https://roughtime.googlesource.com/roughtime/),
-  requires Ed25519
+* Roughtime client (https://roughtime.googlesource.com/roughtime/)
 
 New Protocols / Formats
 ----------------------------------------
@@ -111,7 +125,7 @@ New Protocols / Formats
 Cleanups
 -----------
 
-* Split ffi.cpp and test_ffi.cpp into multiple files
+* Split test_ffi.cpp into multiple files
 
 Compat Headers
 ----------------
@@ -120,6 +134,8 @@ Compat Headers
   can be converted more easily. Would require some networking code
   since the OpenSSL API handles both crypto and IO. Use Asio, since it
   is expected to be the base of future C++ standard network library.
+
+* Write a module exposing a NaCl/libsodium compatible API header.
 
 FFI and Bindings
 ----------------------------------------
@@ -139,9 +155,14 @@ Library Infrastructure
 Build/Test
 ----------------------------------------
 
+* Create Docker image for Travis that runs 16.04 and has all
+  the tools we need pre-installed.
+* Build/export Windows installer exe on AppVeyor
 * Code signing for Windows installers
 * Test runner python script that captures backtraces and other
   debug info during CI
+* Run the TPM tests against an emulator
+  (https://github.com/PeterHuewe/tpm-emulator)
 
 FIPS 140 Build
 ---------------------------------------
@@ -159,6 +180,8 @@ CLI
 
 * Change `tls_server` to be a tty<->socket app, like `tls_client` is,
   instead of a bogus echo server.
+* Add a basic HTTP server mode to tls_server, as some tools like
+  https://github.com/tomato42/tlsfuzzer require this.
 * `encrypt` / `decrypt` tools providing password and/or public key
   based file encryption
 * Make help output more helpful

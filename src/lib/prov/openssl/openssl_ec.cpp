@@ -62,6 +62,29 @@ secure_vector<uint8_t> PKCS8_for_openssl(const EC_PrivateKey& ec)
       .get_contents();
    }
 
+int OpenSSL_EC_curve_builtin(int nid)
+   {
+   // the NID macro is still defined even though the curve may not be
+   // supported, so we need to check the list of builtin curves at runtime
+   EC_builtin_curve builtin_curves[100];
+   size_t num = 0;
+
+   if (!(num = EC_get_builtin_curves(builtin_curves, sizeof(builtin_curves))))
+      {
+      return -1;
+      }
+
+   for(size_t i = 0; i < num; ++i)
+      {
+      if(builtin_curves[i].nid == nid)
+         {
+         return nid;
+         }
+      }
+
+   return -1;
+   }
+
 int OpenSSL_EC_nid_for(const OID& oid)
    {
    if(oid.empty())
@@ -70,32 +93,32 @@ int OpenSSL_EC_nid_for(const OID& oid)
    const std::string name = OIDS::lookup(oid);
 
    if(name == "secp192r1")
-      return NID_X9_62_prime192v1;
+      return OpenSSL_EC_curve_builtin(NID_X9_62_prime192v1);
    if(name == "secp224r1")
-      return NID_secp224r1;
+      return OpenSSL_EC_curve_builtin(NID_secp224r1);
    if(name == "secp256r1")
-      return NID_X9_62_prime256v1;
+      return OpenSSL_EC_curve_builtin(NID_X9_62_prime256v1);
    if(name == "secp384r1")
-      return NID_secp384r1;
+      return OpenSSL_EC_curve_builtin(NID_secp384r1);
    if(name == "secp521r1")
-      return NID_secp521r1;
+      return OpenSSL_EC_curve_builtin(NID_secp521r1);
 
    // OpenSSL 1.0.2 added brainpool curves
 #if OPENSSL_VERSION_NUMBER >= 0x1000200fL
    if(name == "brainpool160r1")
-      return NID_brainpoolP160r1;
+      return OpenSSL_EC_curve_builtin(NID_brainpoolP160r1);
    if(name == "brainpool192r1")
-      return NID_brainpoolP192r1;
+      return OpenSSL_EC_curve_builtin(NID_brainpoolP192r1);
    if(name == "brainpool224r1")
-      return NID_brainpoolP224r1;
+      return OpenSSL_EC_curve_builtin(NID_brainpoolP224r1);
    if(name == "brainpool256r1")
-      return NID_brainpoolP256r1;
+      return OpenSSL_EC_curve_builtin(NID_brainpoolP256r1);
    if(name == "brainpool320r1")
-      return NID_brainpoolP320r1;
+      return OpenSSL_EC_curve_builtin(NID_brainpoolP320r1);
    if(name == "brainpool384r1")
-      return NID_brainpoolP384r1;
+      return OpenSSL_EC_curve_builtin(NID_brainpoolP384r1);
    if(name == "brainpool512r1")
-      return NID_brainpoolP512r1;
+      return OpenSSL_EC_curve_builtin(NID_brainpoolP512r1);
 #endif
 
    return -1;
@@ -109,7 +132,7 @@ int OpenSSL_EC_nid_for(const OID& oid)
 
 namespace {
 
-class OpenSSL_ECDSA_Verification_Operation : public PK_Ops::Verification_with_EMSA
+class OpenSSL_ECDSA_Verification_Operation final : public PK_Ops::Verification_with_EMSA
    {
    public:
       OpenSSL_ECDSA_Verification_Operation(const ECDSA_PublicKey& ecdsa, const std::string& emsa, int nid) :
@@ -148,12 +171,17 @@ class OpenSSL_ECDSA_Verification_Operation : public PK_Ops::Verification_with_EM
          std::unique_ptr<ECDSA_SIG, std::function<void (ECDSA_SIG*)>> sig(nullptr, ECDSA_SIG_free);
          sig.reset(::ECDSA_SIG_new());
 
-         sig->r = BN_bin2bn(sig_bytes              , sig_len / 2, nullptr);
-         if(!sig->r)
-            throw OpenSSL_Error("BN_bin2bn sig r");
-         sig->s = BN_bin2bn(sig_bytes + sig_len / 2, sig_len / 2, nullptr);
-         if(!sig->s)
+         BIGNUM* r = BN_bin2bn(sig_bytes              , sig_len / 2, nullptr);
+         BIGNUM* s = BN_bin2bn(sig_bytes + sig_len / 2, sig_len / 2, nullptr);
+         if(r == nullptr || s == nullptr)
             throw OpenSSL_Error("BN_bin2bn sig s");
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+         sig->r = r;
+         sig->s = s;
+#else
+         ECDSA_SIG_set0(sig.get(), r, s);
+#endif
 
          const int res = ECDSA_do_verify(msg, msg_len, sig.get(), m_ossl_ec.get());
          if(res < 0)
@@ -166,7 +194,7 @@ class OpenSSL_ECDSA_Verification_Operation : public PK_Ops::Verification_with_EM
       size_t m_order_bits = 0;
    };
 
-class OpenSSL_ECDSA_Signing_Operation : public PK_Ops::Signature_with_EMSA
+class OpenSSL_ECDSA_Signing_Operation final : public PK_Ops::Signature_with_EMSA
    {
    public:
       OpenSSL_ECDSA_Signing_Operation(const ECDSA_PrivateKey& ecdsa, const std::string& emsa) :
@@ -193,11 +221,21 @@ class OpenSSL_ECDSA_Signing_Operation : public PK_Ops::Signature_with_EMSA
             throw OpenSSL_Error("ECDSA_do_sign");
 
          const size_t order_bytes = (m_order_bits + 7) / 8;
-         const size_t r_bytes = BN_num_bytes(sig->r);
-         const size_t s_bytes = BN_num_bytes(sig->s);
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+         const BIGNUM* r = sig->r;
+         const BIGNUM* s = sig->s;
+#else
+         const BIGNUM* r;
+         const BIGNUM* s;
+         ECDSA_SIG_get0(sig.get(), &r, &s);
+#endif
+
+         const size_t r_bytes = BN_num_bytes(r);
+         const size_t s_bytes = BN_num_bytes(s);
          secure_vector<uint8_t> sigval(2*order_bytes);
-         BN_bn2bin(sig->r, &sigval[order_bytes - r_bytes]);
-         BN_bn2bin(sig->s, &sigval[2*order_bytes - s_bytes]);
+         BN_bn2bin(r, &sigval[order_bytes - r_bytes]);
+         BN_bn2bin(s, &sigval[2*order_bytes - s_bytes]);
          return sigval;
          }
 
@@ -238,7 +276,7 @@ make_openssl_ecdsa_sig_op(const ECDSA_PrivateKey& key, const std::string& params
 
 namespace {
 
-class OpenSSL_ECDH_KA_Operation : public PK_Ops::Key_Agreement_with_KDF
+class OpenSSL_ECDH_KA_Operation final : public PK_Ops::Key_Agreement_with_KDF
    {
    public:
 

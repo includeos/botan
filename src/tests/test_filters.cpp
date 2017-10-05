@@ -7,6 +7,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
+#define BOTAN_NO_DEPRECATED_WARNINGS
+
 #include "tests.h"
 
 #if defined(BOTAN_HAS_FILTERS)
@@ -23,11 +25,20 @@
    #include <botan/b64_filt.h>
 #endif
 
+#if defined(BOTAN_HAS_PIPE_UNIXFD_IO)
+   #include <botan/fd_unix.h>
+   #include <unistd.h>
+#endif
+
+#if defined(BOTAN_TARGET_OS_HAS_FILESYSTEM)
+   #include <fstream>
+#endif
+
 namespace Botan_Tests {
 
 #if defined(BOTAN_HAS_FILTERS)
 
-class Filter_Tests : public Test
+class Filter_Tests final : public Test
    {
    public:
       std::vector<Test::Result> run() override
@@ -38,16 +49,19 @@ class Filter_Tests : public Test
          results.push_back(test_data_src_sink());
          results.push_back(test_data_src_sink_flush());
          results.push_back(test_pipe_io());
+         results.push_back(test_pipe_fd_io());
          results.push_back(test_pipe_errors());
          results.push_back(test_pipe_hash());
          results.push_back(test_pipe_mac());
          results.push_back(test_pipe_stream());
          results.push_back(test_pipe_cbc());
+         results.push_back(test_pipe_cfb());
          results.push_back(test_pipe_compress());
          results.push_back(test_pipe_codec());
          results.push_back(test_fork());
          results.push_back(test_chain());
          results.push_back(test_threaded_fork());
+
 
          return results;
          }
@@ -60,6 +74,8 @@ class Filter_Tests : public Test
          try
             {
             Botan::SecureQueue queue_a;
+            result.test_eq("queue not attachable", queue_a.attachable(), false);
+
             std::vector<uint8_t> test_data = {0x24, 0xB2, 0xBF, 0xC2, 0xE6, 0xD4, 0x7E, 0x04, 0x67, 0xB3};
             queue_a.write(test_data.data(), test_data.size());
 
@@ -67,6 +83,8 @@ class Filter_Tests : public Test
             result.test_eq("0 bytes read so far from SecureQueue", queue_a.get_bytes_read(), 0);
 
             uint8_t b;
+            result.test_eq("check_available", queue_a.check_available(1), true);
+            result.test_eq("check_available", queue_a.check_available(50), false);
             size_t bytes_read = queue_a.read_byte(b);
             result.test_eq("1 byte read", bytes_read, 1);
 
@@ -120,8 +138,8 @@ class Filter_Tests : public Test
          {
          Test::Result result("DataSinkFlush");
 
-#if defined(BOTAN_HAS_CODEC_FILTERS)
-         std::string tmp_name("botan_test_data_src_sink_flush.tmp");
+#if defined(BOTAN_HAS_CODEC_FILTERS) && defined(BOTAN_TARGET_OS_HAS_FILESYSTEM)
+         const std::string tmp_name("botan_test_data_src_sink_flush.tmp");
          std::ofstream outfile(tmp_name);
 
          Botan::Pipe pipe(new Botan::Hex_Decoder, new Botan::DataSink_Stream(outfile));
@@ -136,7 +154,14 @@ class Filter_Tests : public Test
 
          result.test_eq("output string", ss.str(), "efgh");
 
-         std::remove(tmp_name.c_str());
+         // ensure files are closed
+         outfile.close();
+         outfile_read.close();
+
+         if(std::remove(tmp_name.c_str()) != 0)
+            {
+            result.test_failure("Failed to remove temporary file at conclusion of test");
+            }
 #endif
          return result;
          }
@@ -177,23 +202,39 @@ class Filter_Tests : public Test
          pipe.prepend(nullptr); // ignored
          pipe.pop(); // empty pipe, so ignored
 
+         std::unique_ptr<Botan::Filter> queue_filter(new Botan::SecureQueue);
+
          // can't explicitly insert a queue into the pipe because they are implicit
-         result.test_throws("pipe error", "Invalid argument Pipe::append: SecureQueue cannot be used", [&]()
-            { pipe.append(new Botan::SecureQueue); });
-         result.test_throws("pipe error", "Invalid argument Pipe::prepend: SecureQueue cannot be used", [&]()
-            { pipe.prepend(new Botan::SecureQueue); });
+         result.test_throws("pipe error",
+                            "Invalid argument Pipe::append: SecureQueue cannot be used",
+                            [&]() { pipe.append(queue_filter.get()); });
+
+         result.test_throws("pipe error",
+                            "Invalid argument Pipe::prepend: SecureQueue cannot be used",
+                            [&]() { pipe.prepend(queue_filter.get()); });
 
          pipe.start_msg();
 
+         std::unique_ptr<Botan::Filter> filter(new Botan::BitBucket);
+
          // now inside a message, cannot modify pipe structure
-         result.test_throws("pipe error", "Cannot append to a Pipe while it is processing", [&]()
-            { pipe.append(nullptr); });
-         result.test_throws("pipe error", "Cannot prepend to a Pipe while it is processing", [&]()
-            { pipe.prepend(nullptr); });
-         result.test_throws("pipe error", "Cannot pop off a Pipe while it is processing", [&]()
-            { pipe.pop(); });
+         result.test_throws("pipe error",
+                            "Cannot append to a Pipe while it is processing",
+                            [&]() { pipe.append(filter.get()); });
+
+         result.test_throws("pipe error",
+                            "Cannot prepend to a Pipe while it is processing",
+                            [&]() { pipe.prepend(filter.get()); });
+
+         result.test_throws("pipe error",
+                            "Cannot pop off a Pipe while it is processing",
+                            [&]() { pipe.pop(); });
 
          pipe.end_msg();
+
+         result.test_throws("pipe error",
+                            "Invalid argument Pipe::read: Invalid message number 100",
+                            [&]() { uint8_t b; size_t got = pipe.read(&b, 1, 100); BOTAN_UNUSED(got); });
 
          pipe.append(nullptr); // ignored
          pipe.prepend(nullptr); // ignored
@@ -227,8 +268,10 @@ class Filter_Tests : public Test
          Test::Result result("Pipe");
 
 #if defined(BOTAN_HAS_SHA2_32)
-         Botan::Pipe pipe(new Botan::Hash_Filter("SHA-224"));
+         // unrelated test of popping a chain
+         Botan::Pipe pipe(new Botan::Chain(new Botan::Hash_Filter("SHA-224"), new Botan::Hash_Filter("SHA-224")));
          pipe.pop();
+
          pipe.append(new Botan::Hash_Filter("SHA-256"));
 
          result.test_eq("Message count", pipe.message_count(), 0);
@@ -271,6 +314,71 @@ class Filter_Tests : public Test
          result.test_eq("Expected CRC32d", pipe.read_all(1), "99841F60");
 #endif
 #endif
+         return result;
+         }
+
+      Test::Result test_pipe_cfb()
+         {
+         Test::Result result("Pipe CFB");
+
+#if defined(BOTAN_HAS_BLOWFISH) && defined(BOTAN_HAS_MODE_CFB) && defined(BOTAN_HAS_CODEC_FILTERS)
+
+         // Generated with Botan 1.10
+
+         const Botan::InitializationVector iv("AABBCCDDEEFF0123");
+         const Botan::SymmetricKey key("AABBCCDDEEFF0123");
+
+         const uint8_t msg_bits[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+
+         const std::string cfb_expected[] = {
+            "A4",
+            "BEA4",
+            "06AD98",
+            "E4AFC5AC",
+            "A9B531559C",
+            "38B60DA66445",
+            "194F5E93199839",
+            "093B6381D2E5D806",
+            "B44FA624226EECF027",
+            "80B8DC3332A835AC11A8",
+            "2C0E910A1E5C38344CC5BB",
+            "3CB6180AE2E189342F681023",
+            "DE0F4B10C7D9CADDB5A9078199",
+            "FAE18B0ED873F234CCD6E1555B2D",
+            "7195FFE735B0A95065BA244C77A11F",
+         };
+
+         Botan::Keyed_Filter* cfb_enc = Botan::get_cipher("Blowfish/CFB", key, iv, Botan::ENCRYPTION);
+         Botan::Pipe enc_pipe(cfb_enc, new Botan::Hex_Encoder);
+
+         Botan::Keyed_Filter* cfb_dec = Botan::get_cipher("Blowfish/CFB", key, Botan::DECRYPTION);
+         cfb_dec->set_iv(iv);
+         Botan::Pipe dec_pipe(new Botan::Hex_Decoder, cfb_dec, new Botan::Hex_Encoder);
+
+         for(size_t i = 1; i != sizeof(msg_bits); ++i)
+            {
+            enc_pipe.start_msg();
+            enc_pipe.write(msg_bits, i);
+            enc_pipe.end_msg();
+
+            dec_pipe.process_msg(cfb_expected[i-1]);
+            }
+
+         result.test_eq("enc pipe msg count", enc_pipe.message_count(), sizeof(msg_bits) - 1);
+         result.test_eq("dec pipe msg count", dec_pipe.message_count(), sizeof(msg_bits) - 1);
+
+         for(size_t i = 0; i != enc_pipe.message_count(); ++i)
+            {
+            result.test_eq("encrypt", enc_pipe.read_all_as_string(i), cfb_expected[i]);
+            }
+
+         for(size_t i = 0; i != dec_pipe.message_count(); ++i)
+            {
+            result.test_eq("decrypt", dec_pipe.read_all_as_string(i),
+                           Botan::hex_encode(msg_bits, i+1));
+            }
+#endif
+
          return result;
          }
 
@@ -453,7 +561,7 @@ class Filter_Tests : public Test
          {
          Test::Result result("Pipe CTR");
 
-#if defined(BOTAN_HAS_CTR_BE)
+#if defined(BOTAN_HAS_CTR_BE) && defined(BOTAN_HAS_AES)
          Botan::Keyed_Filter* aes = nullptr;
          const Botan::SymmetricKey some_other_key("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE");
          const Botan::SymmetricKey key("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
@@ -520,6 +628,34 @@ class Filter_Tests : public Test
          return result;
          }
 
+      Test::Result test_pipe_fd_io()
+         {
+         Test::Result result("Pipe file descriptor IO");
+
+#if defined(BOTAN_HAS_PIPE_UNIXFD_IO) && defined(BOTAN_HAS_CODEC_FILTERS)
+         int fd[2];
+         if(::pipe(fd) != 0)
+            return result; // pipe unavailable?
+
+         Botan::Pipe hex_enc(new Botan::Hex_Encoder);
+         Botan::Pipe hex_dec(new Botan::Hex_Decoder);
+
+         hex_enc.process_msg("hi chappy");
+         fd[1] << hex_enc;
+         ::close(fd[1]);
+
+         hex_dec.start_msg();
+         fd[0] >> hex_dec;
+         hex_dec.end_msg();
+         ::close(fd[0]);
+
+         std::string dec = hex_dec.read_all_as_string();
+
+         result.test_eq("IO through Unix pipe works", dec, "hi chappy");
+#endif
+
+         return result;
+         }
 
       Test::Result test_threaded_fork()
          {

@@ -6,13 +6,13 @@
 */
 
 #include <botan/dyn_load.h>
-#include <botan/build.h>
 #include <botan/exceptn.h>
 
 #if defined(BOTAN_TARGET_OS_HAS_DLOPEN)
   #include <dlfcn.h>
 #elif defined(BOTAN_TARGET_OS_HAS_LOADLIBRARY)
   #define NOMINMAX 1
+  #define _WINSOCKAPI_ // stop windows.h including winsock.h
   #include <windows.h>
 #endif
 
@@ -37,7 +37,7 @@ Dynamically_Loaded_Library::Dynamically_Loaded_Library(
    m_lib = ::dlopen(m_lib_name.c_str(), RTLD_LAZY);
 
    if(!m_lib)
-      raise_runtime_loader_exception(m_lib_name, dlerror());
+      raise_runtime_loader_exception(m_lib_name, ::dlerror());
 
 #elif defined(BOTAN_TARGET_OS_HAS_LOADLIBRARY)
    m_lib = ::LoadLibraryA(m_lib_name.c_str());

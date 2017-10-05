@@ -10,8 +10,6 @@
 #if defined(BOTAN_HAS_X509_CERTIFICATES)
 
    #include <botan/calendar.h>
-   #include <botan/pkcs8.h>
-   #include <botan/hash.h>
    #include <botan/pkcs10.h>
    #include <botan/x509self.h>
    #include <botan/x509path.h>
@@ -40,7 +38,7 @@ Botan::X509_Cert_Options ca_opts()
    {
    Botan::X509_Cert_Options opts("Test CA/US/Botan Project/Testing");
 
-   opts.uri = "http://botan.randombit.net";
+   opts.uri = "https://botan.randombit.net";
    opts.dns = "botan.randombit.net";
    opts.email = "testing@randombit.net";
 
@@ -53,12 +51,14 @@ Botan::X509_Cert_Options req_opts1(const std::string& algo)
    {
    Botan::X509_Cert_Options opts("Test User 1/US/Botan Project/Testing");
 
-   opts.uri = "http://botan.randombit.net";
+   opts.uri = "https://botan.randombit.net";
    opts.dns = "botan.randombit.net";
    opts.email = "testing@randombit.net";
 
    opts.not_before("160101200000Z");
    opts.not_after("300101200000Z");
+
+   opts.challenge = "zoom";
 
    if(algo == "RSA")
       {
@@ -76,7 +76,7 @@ Botan::X509_Cert_Options req_opts2()
    {
    Botan::X509_Cert_Options opts("Test User 2/US/Botan Project/Testing");
 
-   opts.uri = "http://botan.randombit.net";
+   opts.uri = "https://botan.randombit.net";
    opts.dns = "botan.randombit.net";
    opts.email = "testing@randombit.net";
 
@@ -388,6 +388,9 @@ Test::Result test_x509_cert(const std::string& sig_algo, const std::string& hash
                                    *user1_key,
                                    hash_fn,
                                    Test::rng());
+
+   result.test_eq("PKCS10 challenge password parsed",
+                  user1_req.challenge_password(), "zoom");
 
    /* Create user #2's key and cert request */
    std::unique_ptr<Botan::Private_Key> user2_key(make_a_private_key(sig_algo));
@@ -866,7 +869,7 @@ Test::Result test_valid_constraints(const std::string& pk_algo)
 /**
  * @brief X.509v3 extension that encodes a given string
  */
-class String_Extension : public Botan::Certificate_Extension
+class String_Extension final : public Botan::Certificate_Extension
    {
    public:
       String_Extension() = default;
@@ -993,6 +996,12 @@ Test::Result test_hashes(const std::string& algo, const std::string& hash_fn = "
 
    const std::unique_ptr<Botan::Private_Key> key(make_a_private_key(algo));
 
+   if(!key)
+      {
+      result.test_note("Skipping due to missing signature algorithm: " + algo);
+      return result;
+      }
+
    struct TestData
       {
       const std::string issuer, subject, issuer_hash, subject_hash;
@@ -1053,7 +1062,7 @@ Test::Result test_hashes(const std::string& algo, const std::string& hash_fn = "
    return result;
    }
 
-class X509_Cert_Unit_Tests : public Test
+class X509_Cert_Unit_Tests final : public Test
    {
    public:
       std::vector<Test::Result> run() override

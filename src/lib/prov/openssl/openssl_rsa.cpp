@@ -15,6 +15,7 @@
 #include <botan/internal/pk_ops_impl.h>
 #include <botan/internal/ct_utils.h>
 
+#include <cstdlib>
 #include <functional>
 #include <memory>
 
@@ -39,7 +40,7 @@ std::pair<int, size_t> get_openssl_enc_pad(const std::string& eme)
       throw Lookup_Error("OpenSSL RSA does not support EME " + eme);
    }
 
-class OpenSSL_RSA_Encryption_Operation : public PK_Ops::Encryption
+class OpenSSL_RSA_Encryption_Operation final : public PK_Ops::Encryption
    {
    public:
 
@@ -94,7 +95,7 @@ class OpenSSL_RSA_Encryption_Operation : public PK_Ops::Encryption
       int m_padding = 0;
    };
 
-class OpenSSL_RSA_Decryption_Operation : public PK_Ops::Decryption
+class OpenSSL_RSA_Decryption_Operation final : public PK_Ops::Decryption
    {
    public:
 
@@ -137,7 +138,7 @@ class OpenSSL_RSA_Decryption_Operation : public PK_Ops::Decryption
       int m_padding = 0;
    };
 
-class OpenSSL_RSA_Verification_Operation : public PK_Ops::Verification_with_EMSA
+class OpenSSL_RSA_Verification_Operation final : public PK_Ops::Verification_with_EMSA
    {
    public:
 
@@ -152,7 +153,14 @@ class OpenSSL_RSA_Verification_Operation : public PK_Ops::Verification_with_EMSA
             throw OpenSSL_Error("d2i_RSAPublicKey");
          }
 
-      size_t max_input_bits() const override { return ::BN_num_bits(m_openssl_rsa->n) - 1; }
+      size_t max_input_bits() const override
+         {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+         return ::BN_num_bits(m_openssl_rsa->n) - 1;
+#else
+         return ::RSA_bits(m_openssl_rsa.get()) - 1;
+#endif
+         }
 
       bool with_recovery() const override { return true; }
 
@@ -164,7 +172,9 @@ class OpenSSL_RSA_Verification_Operation : public PK_Ops::Verification_with_EMSA
             throw Invalid_Argument("OpenSSL RSA verify input too large");
 
          secure_vector<uint8_t> inbuf(mod_sz);
-         copy_mem(&inbuf[mod_sz - msg_len], msg, msg_len);
+
+         if(msg_len > 0)
+            copy_mem(&inbuf[mod_sz - msg_len], msg, msg_len);
 
          secure_vector<uint8_t> outbuf(mod_sz);
 
@@ -179,7 +189,7 @@ class OpenSSL_RSA_Verification_Operation : public PK_Ops::Verification_with_EMSA
       std::unique_ptr<RSA, std::function<void (RSA*)>> m_openssl_rsa;
    };
 
-class OpenSSL_RSA_Signing_Operation : public PK_Ops::Signature_with_EMSA
+class OpenSSL_RSA_Signing_Operation final : public PK_Ops::Signature_with_EMSA
    {
    public:
 
@@ -215,7 +225,14 @@ class OpenSSL_RSA_Signing_Operation : public PK_Ops::Signature_with_EMSA
          return outbuf;
          }
 
-      size_t max_input_bits() const override { return ::BN_num_bits(m_openssl_rsa->n) - 1; }
+      size_t max_input_bits() const override
+         {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+         return ::BN_num_bits(m_openssl_rsa->n) - 1;
+#else
+         return ::RSA_bits(m_openssl_rsa.get()) - 1;
+#endif
+         }
 
    private:
       std::unique_ptr<RSA, std::function<void (RSA*)>> m_openssl_rsa;
@@ -269,17 +286,17 @@ make_openssl_rsa_private_key(RandomNumberGenerator& rng, size_t rsa_bits)
    std::unique_ptr<RSA, std::function<void (RSA*)>> rsa(RSA_new(), RSA_free);
    if(!rsa)
       throw OpenSSL_Error("RSA_new");
-   if(!RSA_generate_key_ex(rsa.get(), rsa_bits, bn.get(), NULL))
+   if(!RSA_generate_key_ex(rsa.get(), rsa_bits, bn.get(), nullptr))
       throw OpenSSL_Error("RSA_generate_key_ex");
 
-   uint8_t* der = NULL;
+   uint8_t* der = nullptr;
    int bytes = i2d_RSAPrivateKey(rsa.get(), &der);
    if(bytes < 0)
       throw OpenSSL_Error("i2d_RSAPrivateKey");
 
    const secure_vector<uint8_t> keydata(der, der + bytes);
    memset(der, 0, bytes);
-   free(der);
+   std::free(der);
    return std::unique_ptr<Botan::RSA_PrivateKey>
       (new RSA_PrivateKey(AlgorithmIdentifier(), keydata));
    }

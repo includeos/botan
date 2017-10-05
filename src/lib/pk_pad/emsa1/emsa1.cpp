@@ -6,6 +6,7 @@
 */
 
 #include <botan/emsa1.h>
+#include <botan/exceptn.h>
 
 namespace Botan {
 
@@ -85,7 +86,7 @@ bool EMSA1::verify(const secure_vector<uint8_t>& input,
          if(our_coding[i] != 0)
             return false;
 
-      return same_mem(input.data(), &our_coding[offset], input.size());
+      return constant_time_compare(input.data(), &our_coding[offset], input.size());
       }
    catch(Invalid_Argument)
       {

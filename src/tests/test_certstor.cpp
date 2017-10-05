@@ -10,6 +10,7 @@
    #include <botan/certstor.h>
    #include <botan/internal/filesystem.h>
    #include <botan/pkcs8.h>
+   #include <botan/pk_keys.h>
    #include <sstream>
    #if defined(BOTAN_HAS_CERTSTOR_SQLITE3)
       #include <botan/certstor_sqlite.h>
@@ -21,7 +22,8 @@ namespace Botan_Tests {
 
 namespace {
 
-#if defined(BOTAN_HAS_CERTSTOR_SQL)
+#if defined(BOTAN_HAS_CERTSTOR_SQL) && defined(BOTAN_HAS_RSA)
+
 struct CertificateAndKey
    {
    const Botan::X509_Certificate certificate;
@@ -260,7 +262,7 @@ Test::Result test_certstor_find_hash_subject(const std::vector<CertificateAndKey
       }
    }
 
-class Certstor_Tests : public Test
+class Certstor_Tests final : public Test
    {
    public:
       std::vector<Test::Result> run() override

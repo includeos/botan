@@ -57,6 +57,9 @@ Extensions::Extensions(const Extensions& extensions) : ASN1_Object()
 */
 Extensions& Extensions::operator=(const Extensions& other)
    {
+   if(this == &other)
+      return *this;
+
    m_extensions.clear();
 
    for(size_t i = 0; i != other.m_extensions.size(); ++i)
@@ -655,7 +658,7 @@ namespace {
 /*
 * A policy specifier
 */
-class Policy_Information : public ASN1_Object
+class Policy_Information final : public ASN1_Object
    {
    public:
       Policy_Information() = default;

@@ -1,5 +1,5 @@
 <defines>
-UTIL_FUNCTIONS -> 20161127
+UTIL_FUNCTIONS -> 20171003
 </defines>
 
 load_on always
@@ -9,7 +9,6 @@ assert.h
 bswap.h
 calendar.h
 charset.h
-cpuid.h
 compiler.h
 data_src.h
 database.h
@@ -39,6 +38,6 @@ semaphore.h
 stl_util.h
 </header:internal>
 
-<libs>
-linux -> rt
-</libs>
+<requires>
+cpuid
+</requires>

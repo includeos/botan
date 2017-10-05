@@ -156,7 +156,7 @@ class Manger_Timing_Test : public Timing_Test
             {
             m_dec.decrypt(input.data(), m_ctext_length);
             }
-         catch(Botan::Decoding_Error e)
+         catch(Botan::Decoding_Error&)
             {
             }
          ticks end = get_ticks();
@@ -229,7 +229,7 @@ ticks Lucky13_Timing_Test::measure_critical_function(std::vector<uint8_t> input)
       {
       m_dec.finish(data);
       }
-   catch(Botan::TLS::TLS_Exception& e)
+   catch(Botan::TLS::TLS_Exception&)
       {
       }
    ticks end = get_ticks();
@@ -280,6 +280,8 @@ ticks ECDSA_Timing_Test::measure_critical_function(std::vector<uint8_t> input)
    const Botan::PointGFp k_times_P = m_base_point.blinded_multiply(k, Timing_Test::timing_test_rng());
    const Botan::BigInt r = m_mod_order.reduce(k_times_P.get_affine_x());
    const Botan::BigInt s = m_mod_order.multiply(inverse_mod(k, m_order), mul_add(m_x, r, msg));
+   BOTAN_UNUSED(r);
+   BOTAN_UNUSED(s);
 
    ticks end = get_ticks();
 
@@ -342,7 +344,7 @@ class Timing_Test_Command : public Command
          : Command("timing_test test_type --test-data-file= --test-data-dir=src/tests/data/timing "
                    "--warmup-runs=1000 --measurement-runs=10000") {}
 
-      virtual void go() override
+      void go() override
          {
          const std::string test_type = get_arg("test_type");
          const size_t warmup_runs = get_arg_sz("warmup-runs");
@@ -363,23 +365,7 @@ class Timing_Test_Command : public Command
             filename = test_data_dir + "/" + test_type + ".vec";
             }
 
-         std::vector<std::string> lines;
-
-            {
-            std::ifstream infile(filename);
-            if(infile.good() == false)
-               {
-               throw CLI_Error("Error reading test data from '" + filename + "'");
-               }
-            std::string line;
-            while(std::getline(infile, line))
-               {
-               if(line.size() > 0 && line.at(0) != '#')
-                  {
-                  lines.push_back(line);
-                  }
-               }
-            }
+         std::vector<std::string> lines = read_testdata(filename);
 
          std::vector<std::vector<ticks>> results = test->execute_evaluation(lines, warmup_runs, measurement_runs);
 
@@ -396,9 +382,29 @@ class Timing_Test_Command : public Command
          output() << oss.str();
          }
    private:
+
+      std::vector<std::string> read_testdata(const std::string& filename)
+         {
+         std::vector<std::string> lines;
+         std::ifstream infile(filename);
+         if(infile.good() == false)
+            {
+            throw CLI_Error("Error reading test data from '" + filename + "'");
+            }
+         std::string line;
+         while(std::getline(infile, line))
+            {
+            if(line.size() > 0 && line.at(0) != '#')
+               {
+               lines.push_back(line);
+               }
+            }
+         return lines;
+         }
+
       std::unique_ptr<Timing_Test> lookup_timing_test(const std::string& test_type);
 
-      virtual std::string help_text() const override
+      std::string help_text() const override
          {
          // TODO check feature macros
          return (Command::help_text() +

@@ -6,18 +6,16 @@
 */
 
 #include <botan/x509_ca.h>
+#include <botan/pkcs10.h>
 #include <botan/pubkey.h>
 #include <botan/der_enc.h>
-#include <botan/ber_dec.h>
 #include <botan/bigint.h>
 #include <botan/parsing.h>
 #include <botan/oids.h>
 #include <botan/hash.h>
 #include <botan/key_constraint.h>
 #include <algorithm>
-#include <typeinfo>
 #include <iterator>
-#include <set>
 
 namespace Botan {
 
@@ -32,7 +30,7 @@ X509_CA::X509_CA(const X509_Certificate& c,
    if(!m_cert.is_CA_cert())
       throw Invalid_Argument("X509_CA: This certificate is not for a CA");
 
-   m_signer = choose_sig_format(key, rng, hash_fn, m_ca_sig_algo);
+   m_signer.reset(choose_sig_format(key, rng, hash_fn, m_ca_sig_algo));
    }
 
 /*
@@ -40,7 +38,7 @@ X509_CA::X509_CA(const X509_Certificate& c,
 */
 X509_CA::~X509_CA()
    {
-   delete m_signer;
+   /* for unique_ptr */
    }
 
 /*
@@ -83,7 +81,7 @@ X509_Certificate X509_CA::sign_request(const PKCS10_Request& req,
    extensions.replace(
       new Cert_Extension::Extended_Key_Usage(req.ex_constraints()));
 
-   return make_cert(m_signer, rng, m_ca_sig_algo,
+   return make_cert(m_signer.get(), rng, m_ca_sig_algo,
                     req.raw_public_key(),
                     not_before, not_after,
                     m_cert.subject_dn(), req.subject_dn(),
@@ -189,7 +187,7 @@ X509_CRL X509_CA::make_crl(const std::vector<CRL_Entry>& revoked,
 
    // clang-format off
    const std::vector<uint8_t> crl = X509_Object::make_signed(
-      m_signer, rng, m_ca_sig_algo,
+      m_signer.get(), rng, m_ca_sig_algo,
       DER_Encoder().start_cons(SEQUENCE)
          .encode(X509_CRL_VERSION-1)
          .encode(m_ca_sig_algo)

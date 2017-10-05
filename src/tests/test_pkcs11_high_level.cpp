@@ -10,11 +10,7 @@
 
 #include <string>
 #include <vector>
-#include <functional>
 #include <memory>
-#include <array>
-#include <type_traits>
-#include <map>
 #include <numeric>
 
 #if defined(BOTAN_HAS_PKCS11)
@@ -148,7 +144,7 @@ Test::Result test_module_get_info()
    return result;
    }
 
-class Module_Tests : public PKCS11_Test
+class Module_Tests final : public PKCS11_Test
    {
    public:
       std::vector<Test::Result> run() override
@@ -286,7 +282,7 @@ Test::Result test_get_mechanisms_info()
    return result;
    }
 
-class Slot_Tests : public PKCS11_Test
+class Slot_Tests final : public PKCS11_Test
    {
    public:
       std::vector<Test::Result> run() override
@@ -421,7 +417,7 @@ Test::Result test_session_info()
    return result;
    }
 
-class Session_Tests : public PKCS11_Test
+class Session_Tests final : public PKCS11_Test
    {
    public:
       std::vector<Test::Result> run() override
@@ -617,7 +613,7 @@ Test::Result test_object_copy()
    }
 #endif
 
-class Object_Tests : public PKCS11_Test
+class Object_Tests final : public PKCS11_Test
    {
    public:
       std::vector<Test::Result> run() override
@@ -798,10 +794,10 @@ Test::Result test_rsa_encrypt_decrypt()
 
    auto encrypt_and_decrypt = [&keypair, &result](const std::vector<uint8_t>& plaintext, const std::string& padding)
       {
-      Botan::PK_Encryptor_EME encryptor(keypair.first, Test::rng(), padding, "pkcs11");
+      Botan::PK_Encryptor_EME encryptor(keypair.first, Test::rng(), padding);
       auto encrypted = encryptor.encrypt(plaintext, Test::rng());
 
-      Botan::PK_Decryptor_EME decryptor(keypair.second, Test::rng(), padding, "pkcs11");
+      Botan::PK_Decryptor_EME decryptor(keypair.second, Test::rng(), padding);
       auto decrypted = decryptor.decrypt(encrypted);
 
       // some token / middlewares do not remove the padding bytes
@@ -811,7 +807,7 @@ Test::Result test_rsa_encrypt_decrypt()
       };
 
    std::vector<uint8_t> plaintext(256);
-   std::iota(std::begin(plaintext), std::end(plaintext), 0);
+   std::iota(std::begin(plaintext), std::end(plaintext), static_cast<uint8_t>(0));
    encrypt_and_decrypt(plaintext, "Raw");
 
    plaintext = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x00 };
@@ -834,11 +830,11 @@ Test::Result test_rsa_sign_verify()
    PKCS11_RSA_KeyPair keypair = generate_rsa_keypair(test_session);
 
    std::vector<uint8_t> plaintext(256);
-   std::iota(std::begin(plaintext), std::end(plaintext), 0);
+   std::iota(std::begin(plaintext), std::end(plaintext), static_cast<uint8_t>(0));
 
    auto sign_and_verify = [&keypair, &plaintext, &result](std::string const& emsa, bool multipart)
       {
-      Botan::PK_Signer signer(keypair.second, Test::rng(), emsa, Botan::IEEE_1363, "pkcs11");
+      Botan::PK_Signer signer(keypair.second, Test::rng(), emsa, Botan::IEEE_1363);
       std::vector<uint8_t> signature;
       if(multipart)
          {
@@ -850,7 +846,7 @@ Test::Result test_rsa_sign_verify()
          signature = signer.sign_message(plaintext, Test::rng());
          }
 
-      Botan::PK_Verifier verifier(keypair.first, emsa, Botan::IEEE_1363, "pkcs11");
+      Botan::PK_Verifier verifier(keypair.first, emsa, Botan::IEEE_1363);
       bool rsa_ok = false;
       if(multipart)
          {
@@ -881,7 +877,7 @@ Test::Result test_rsa_sign_verify()
    return result;
    }
 
-class PKCS11_RSA_Tests : public PKCS11_Test
+class PKCS11_RSA_Tests final : public PKCS11_Test
    {
    public:
       std::vector<Test::Result> run() override
@@ -1099,10 +1095,10 @@ Test::Result test_ecdsa_sign_verify()
 
    auto sign_and_verify = [ &keypair, &plaintext, &result ](const std::string& emsa)
       {
-      Botan::PK_Signer signer(keypair.second, Test::rng(), emsa, Botan::IEEE_1363, "pkcs11");
+      Botan::PK_Signer signer(keypair.second, Test::rng(), emsa, Botan::IEEE_1363);
       auto signature = signer.sign_message(plaintext, Test::rng());
 
-      Botan::PK_Verifier token_verifier(keypair.first, emsa, Botan::IEEE_1363, "pkcs11");
+      Botan::PK_Verifier token_verifier(keypair.first, emsa, Botan::IEEE_1363);
       bool ecdsa_ok = token_verifier.verify_message(plaintext, signature);
 
       result.test_eq("ECDSA PKCS11 sign and verify: " + emsa, ecdsa_ok, true);
@@ -1124,7 +1120,7 @@ Test::Result test_ecdsa_sign_verify()
    return result;
    }
 
-class PKCS11_ECDSA_Tests : public PKCS11_Test
+class PKCS11_ECDSA_Tests final : public PKCS11_Test
    {
    public:
       std::vector<Test::Result> run() override
@@ -1332,8 +1328,8 @@ Test::Result test_ecdh_derive()
    PKCS11_ECDH_KeyPair keypair2 = generate_ecdh_keypair(test_session, "Botan test ECDH key2");
 
    // SoftHSMv2 only supports CKD_NULL KDF at the moment
-   Botan::PK_Key_Agreement ka(keypair.second, Test::rng(), "Raw", "pkcs11");
-   Botan::PK_Key_Agreement kb(keypair2.second, Test::rng(), "Raw", "pkcs11");
+   Botan::PK_Key_Agreement ka(keypair.second, Test::rng(), "Raw");
+   Botan::PK_Key_Agreement kb(keypair2.second, Test::rng(), "Raw");
 
    Botan::SymmetricKey alice_key = ka.derive_key(32, unlock(EC2OSP(keypair2.first.public_point(),
                                    PointGFp::UNCOMPRESSED)));
@@ -1350,7 +1346,7 @@ Test::Result test_ecdh_derive()
    return result;
    }
 
-class PKCS11_ECDH_Tests : public PKCS11_Test
+class PKCS11_ECDH_Tests final : public PKCS11_Test
    {
    public:
       std::vector<Test::Result> run() override
@@ -1382,8 +1378,8 @@ Test::Result test_rng_generate_random()
    TestSession test_session(true);
 
    PKCS11_RNG rng(test_session.session());
-
    result.confirm("RNG already seeded", rng.is_seeded());
+
    std::vector<uint8_t> random(20);
    rng.randomize(random.data(), random.size());
    result.test_ne("random data generated", random, std::vector<uint8_t>(20));
@@ -1397,6 +1393,14 @@ Test::Result test_rng_add_entropy()
    TestSession test_session(true);
 
    PKCS11_RNG rng(test_session.session());
+
+   result.confirm("RNG already seeded", rng.is_seeded());
+   rng.clear();
+   result.confirm("RNG ignores call to clear", rng.is_seeded());
+
+   result.test_eq("RNG ignores calls to reseed",
+                  rng.reseed(Botan::Entropy_Sources::global_sources(), 256, std::chrono::milliseconds(300)),
+                  0);
 
    auto random = Test::rng().random_vec(20);
    rng.add_entropy(random.data(), random.size());
@@ -1431,7 +1435,7 @@ Test::Result test_pkcs11_hmac_drbg()
    }
 #endif
 
-class PKCS11_RNG_Tests : public PKCS11_Test
+class PKCS11_RNG_Tests final : public PKCS11_Test
    {
    public:
       std::vector<Test::Result> run() override
@@ -1518,7 +1522,7 @@ Test::Result test_change_so_pin()
    return result;
    }
 
-class PKCS11_Token_Management_Tests : public PKCS11_Test
+class PKCS11_Token_Management_Tests final : public PKCS11_Test
    {
    public:
       std::vector<Test::Result> run() override
@@ -1564,7 +1568,7 @@ Test::Result test_x509_import()
    return result;
    }
 
-class PKCS11_X509_Tests : public PKCS11_Test
+class PKCS11_X509_Tests final : public PKCS11_Test
    {
    public:
       std::vector<Test::Result> run() override

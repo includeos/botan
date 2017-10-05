@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_COMPRESSION_TRANSFORM_H__
-#define BOTAN_COMPRESSION_TRANSFORM_H__
+#ifndef BOTAN_COMPRESSION_TRANSFORM_H_
+#define BOTAN_COMPRESSION_TRANSFORM_H_
 
 #include <botan/secmem.h>
 #include <string>
@@ -16,7 +16,7 @@ namespace Botan {
 /*
 * Interface for a compression algorithm.
 */
-class BOTAN_DLL Compression_Algorithm
+class BOTAN_PUBLIC_API(2,0) Compression_Algorithm
    {
    public:
       /**
@@ -56,13 +56,13 @@ class BOTAN_DLL Compression_Algorithm
       */
       virtual void clear() = 0;
 
-      virtual ~Compression_Algorithm() {}
+      virtual ~Compression_Algorithm() = default;
    };
 
 /*
 * Interface for a decompression algorithm.
 */
-class BOTAN_DLL Decompression_Algorithm
+class BOTAN_PUBLIC_API(2,0) Decompression_Algorithm
    {
    public:
       /**
@@ -97,11 +97,11 @@ class BOTAN_DLL Decompression_Algorithm
       */
       virtual void clear() = 0;
 
-      virtual ~Decompression_Algorithm() {}
+      virtual ~Decompression_Algorithm() = default;
    };
 
-BOTAN_DLL Compression_Algorithm* make_compressor(const std::string& type);
-BOTAN_DLL Decompression_Algorithm* make_decompressor(const std::string& type);
+BOTAN_PUBLIC_API(2,0) Compression_Algorithm* make_compressor(const std::string& type);
+BOTAN_PUBLIC_API(2,0) Decompression_Algorithm* make_decompressor(const std::string& type);
 
 /**
 * Adapts a zlib style API
@@ -109,7 +109,7 @@ BOTAN_DLL Decompression_Algorithm* make_decompressor(const std::string& type);
 class Compression_Stream
    {
    public:
-      virtual ~Compression_Stream() {}
+      virtual ~Compression_Stream() = default;
 
       virtual void next_in(uint8_t* b, size_t len) = 0;
 

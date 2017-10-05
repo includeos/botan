@@ -3,7 +3,7 @@
 """
 Used to generate lib/tls/tls_suite_info.cpp from IANA params
 
-(C) 2011, 2012, 2013, 2014, 2015, 2016 Jack Lloyd
+(C) 2011, 2012, 2013, 2014, 2015, 2016, 2017 Jack Lloyd
 
 Botan is released under the Simplified BSD License (see license.txt)
 """
@@ -44,6 +44,9 @@ def to_ciphersuite_info(code, name):
     if mac_algo == '8' and cipher[-1] == 'CCM':
         cipher = cipher[:-1]
         mac_algo = 'CCM_8'
+    elif cipher[-2] == 'CCM' and cipher[-1] == '8':
+        cipher = cipher[:-1]
+        mac_algo = 'CCM_8'
 
     if mac_algo == 'CCM':
         cipher += ['CCM']
@@ -60,7 +63,7 @@ def to_ciphersuite_info(code, name):
         'CAMELLIA': ('Camellia',None),
         'AES': ('AES',None),
         'SEED': ('SEED',16),
-        'ARIA': ('ARIA',16),
+        'ARIA': ('ARIA',None),
         }
 
     tls_to_botan_names = {
@@ -108,7 +111,7 @@ def to_ciphersuite_info(code, name):
     if cipher_keylen is None:
         cipher_keylen = int(cipher[1]) / 8
 
-    if cipher_algo in ['AES', 'Camellia']:
+    if cipher_algo in ['AES', 'Camellia', 'ARIA']:
         cipher_algo += '-%d' % (cipher_keylen*8)
 
     modestr = ''
@@ -125,7 +128,7 @@ def to_ciphersuite_info(code, name):
 
     mode = cipher[-1]
     if mode not in ['CBC', 'GCM', 'CCM(8)', 'CCM', 'OCB']:
-        print "#warning Unknown mode %s" % (' '.join(cipher))
+        print "#warning Unknown mode '%s' for ciphersuite %s (0x%d)" % (' '.join(cipher), name, code)
 
     ivlen = 8 if cipher_algo == '3DES' else 16
 
@@ -173,6 +176,11 @@ def process_command_line(args):
     parser.add_option('--without-ocb', action='store_false', dest='with_ocb',
                       help='disable OCB AEAD suites')
 
+    parser.add_option('--with-aria', action='store_true', default=False,
+                      help='enable ARIA suites')
+    parser.add_option('--without-aria', action='store_false', dest='with_aria',
+                      help='disable ARIA suites')
+
     parser.add_option('--with-cecpq1', action='store_true', default=True,
                       help='enable CECPQ1 suites')
     parser.add_option('--without-cecpq1', action='store_false', dest='with_cecpq1',
@@ -199,10 +207,13 @@ def main(args = None):
     weak_crypto = ['EXPORT', 'RC2', 'IDEA', 'RC4', '_DES_', 'WITH_NULL']
     static_dh = ['ECDH_ECDSA', 'ECDH_RSA', 'DH_DSS', 'DH_RSA'] # not supported
     protocol_goop = ['SCSV', 'KRB5']
-    maybe_someday = ['ARIA', 'RSA_PSK']
+    maybe_someday = ['RSA_PSK']
     not_supported = weak_crypto + static_dh + protocol_goop + maybe_someday
 
     (options, args) = process_command_line(args)
+
+    if options.with_aria == False:
+        not_supported += ['ARIA']
 
     ciphersuite_re = re.compile(' +0x([0-9a-fA-F][0-9a-fA-F]),0x([0-9a-fA-F][0-9a-fA-F]) + TLS_([A-Za-z_0-9]+) ')
 

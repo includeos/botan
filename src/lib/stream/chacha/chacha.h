@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_CHACHA_H__
-#define BOTAN_CHACHA_H__
+#ifndef BOTAN_CHACHA_H_
+#define BOTAN_CHACHA_H_
 
 #include <botan/stream_cipher.h>
 
@@ -15,7 +15,7 @@ namespace Botan {
 /**
 * DJB's ChaCha (http://cr.yp.to/chacha.html)
 */
-class BOTAN_DLL ChaCha final : public StreamCipher
+class BOTAN_PUBLIC_API(2,0) ChaCha final : public StreamCipher
    {
    public:
       StreamCipher* clone() const override { return new ChaCha(m_rounds); }
@@ -25,7 +25,7 @@ class BOTAN_DLL ChaCha final : public StreamCipher
       * @note Currently only 8, 12 or 20 rounds are supported, all others
       * will throw an exception
       */
-      ChaCha(size_t rounds = 20);
+      explicit ChaCha(size_t rounds = 20);
 
       std::string provider() const override;
 

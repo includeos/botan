@@ -6,17 +6,17 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_ASSERTION_CHECKING_H__
-#define BOTAN_ASSERTION_CHECKING_H__
+#ifndef BOTAN_ASSERTION_CHECKING_H_
+#define BOTAN_ASSERTION_CHECKING_H_
 
-#include <botan/build.h>
+#include <botan/compiler.h>
 
 namespace Botan {
 
 /**
 * Called when an assertion fails
 */
-BOTAN_NORETURN void BOTAN_DLL assertion_failure(const char* expr_str,
+BOTAN_NORETURN void BOTAN_PUBLIC_API(2,0) assertion_failure(const char* expr_str,
                                  const char* assertion_made,
                                  const char* func,
                                  const char* file,

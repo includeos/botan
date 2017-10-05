@@ -1,5 +1,6 @@
 /*
 * (C) 2010,2014,2015 Jack Lloyd
+* (C) 2017 René Korthaus, Rohde & Schwarz Cybersecurity
 *
 * Botan is released under the Simplified BSD License (see license.txt)
 */
@@ -9,11 +10,13 @@
 #if defined(BOTAN_HAS_X509_CERTIFICATES)
 
 #include <botan/certstor.h>
+#include <botan/pk_keys.h>
 #include <botan/pkcs8.h>
 #include <botan/x509_ca.h>
 #include <botan/x509cert.h>
 #include <botan/x509path.h>
 #include <botan/x509self.h>
+#include <botan/data_src.h>
 
 #if defined(BOTAN_HAS_OCSP)
    #include <botan/ocsp.h>
@@ -31,11 +34,12 @@ class Sign_Cert final : public Command
       void go() override
          {
          Botan::X509_Certificate ca_cert(get_arg("ca_cert"));
-         std::unique_ptr<Botan::PKCS8_PrivateKey> key;
+         std::unique_ptr<Botan::Private_Key> key;
+         const std::string pass = get_arg("ca-key-pass");
 
-         if(flag_set("ca_key_pass"))
+         if(!pass.empty())
             {
-            key.reset(Botan::PKCS8::load_key(get_arg("ca_key"), rng(), get_arg("ca_key_pass")));
+            key.reset(Botan::PKCS8::load_key(get_arg("ca_key"), rng(), pass));
             }
          else
             {

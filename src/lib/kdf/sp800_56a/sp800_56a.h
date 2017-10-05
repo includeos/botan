@@ -6,8 +6,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_SP800_56A_H__
-#define BOTAN_SP800_56A_H__
+#ifndef BOTAN_SP800_56A_H_
+#define BOTAN_SP800_56A_H_
 
 #include <botan/kdf.h>
 #include <botan/hash.h>
@@ -19,7 +19,7 @@ namespace Botan {
  * NIST SP 800-56A KDF using hash function
  * @warning This KDF ignores the provided salt value
  */
-class BOTAN_DLL SP800_56A_Hash final : public KDF
+class BOTAN_PUBLIC_API(2,2) SP800_56A_Hash final : public KDF
    {
    public:
       std::string name() const override { return "SP800-56A(" + m_hash->name() + ")"; }
@@ -59,7 +59,7 @@ class BOTAN_DLL SP800_56A_Hash final : public KDF
 /**
  * NIST SP 800-56A KDF using HMAC
  */
-class BOTAN_DLL SP800_56A_HMAC final : public KDF
+class BOTAN_PUBLIC_API(2,2) SP800_56A_HMAC final : public KDF
    {
    public:
       std::string name() const override { return "SP800-56A(" + m_mac->name() + ")"; }

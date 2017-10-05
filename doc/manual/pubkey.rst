@@ -322,7 +322,7 @@ Key Checking
 
 Most public key algorithms have limitations or restrictions on their
 parameters. For example RSA requires an odd exponent, and algorithms
-based on the discrete logarithm problem need a generator $> 1$.
+based on the discrete logarithm problem need a generator > 1.
 
 Each public key type has a function
 
@@ -337,6 +337,30 @@ Each public key type has a function
   a key (which, after all, is just some numbers) with a user or other
   entity. If *strong* is ``true``, then it does "strong" checking, which
   includes expensive operations like primality checking.
+
+As key checks are not automatically performed they must be called
+manually after loading keys from untrusted sources. If a key from an untrusted source
+is not checked, the implementation might be vulnerable to algorithm specific attacks.
+
+The following example loads the Subject Public Key from the x509 certificate ``cert.pem`` and checks the
+loaded key. If the key check fails a respective error is thrown.
+
+.. code-block:: cpp
+
+    #include <botan/x509cert.h>
+    #include <botan/auto_rng.h>
+    #include <botan/rng.h>
+    
+    int main()
+       {
+       Botan::X509_Certificate cert("cert.pem");
+       std::unique_ptr<Botan::RandomNumberGenerator> rng(new Botan::AutoSeeded_RNG);
+       std::unique_ptr<Botan::Public_Key> key(cert.subject_public_key());
+       if(!key->check_key(*rng.get(), false))
+          {
+          throw std::invalid_argument("Loaded key is invalid");
+          }
+       }
 
 Encryption
 ---------------------------------
@@ -438,7 +462,9 @@ Botan implements the following encryption algorithms and padding schemes:
 1. RSA
     - "PKCS1v15" || "EME-PKCS1-v1_5"
     - "OAEP" || "EME-OAEP" || "EME1" || "EME1(SHA-1)" || "EME1(SHA-256)"
-
+#. DLIES
+#. ECIES
+#. SM2
 
 Code Example
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -589,6 +615,8 @@ Botan implements the following signature algorithms:
 #. ECGDSA
 #. ECKDSA
 #. GOST 34.10-2001
+#. Ed25519
+#. SM2
 
 Code Example
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -671,11 +699,11 @@ to use.
 
 Botan implements the following key agreement methods:
 
-1. ECDH
-#. DH
-#. DLIES
-#. ECIES
-
+1. ECDH over GF(p) Weierstrass curves
+#. ECDH over x25519
+#. DH over prime fields
+#. McEliece
+#. NewHope
 
 Code Example
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -58,10 +58,6 @@ external build systems, see the manual for details.
     :target: https://ci.appveyor.com/project/randombit/botan/branch/master
     :alt: AppVeyor CI status
 
-.. image:: https://circleci.com/gh/randombit/botan.svg?style=shield
-    :target: https://circleci.com/gh/randombit/botan
-    :alt: CircleCI status
-
 .. image:: https://botan-ci.kullo.net/badge
     :target: https://botan-ci.kullo.net/
     :alt: Kullo CI status
@@ -106,9 +102,9 @@ Version 2 requires a C++11 compiler; GCC 4.8 and later, Clang 3.5 and
 later, and MSVC 2015 are regularly tested.
 
 The latest 2.x release is
-`2.1.0 <https://botan.randombit.net/releases/Botan-2.1.0.tgz>`_
-`(sig) <https://botan.randombit.net/releases/Botan-2.1.0.tgz.asc>`_
-released on 2017-04-04
+`2.3.0 <https://botan.randombit.net/releases/Botan-2.3.0.tgz>`_
+`(sig) <https://botan.randombit.net/releases/Botan-2.3.0.tgz.asc>`_
+released on 2017-10-02
 
 Old Stable Release
 ----------------------------------------
@@ -119,9 +115,9 @@ critical security updates (with all support ending on 2018-1-1), and the
 developers do not recommend its use anymore.
 
 The latest 1.10 release is
-`1.10.16 <https://botan.randombit.net/releases/Botan-1.10.16.tgz>`_
-`(sig) <https://botan.randombit.net/releases/Botan-1.10.16.tgz.asc>`_
-released on 2017-04-04
+`1.10.17 <https://botan.randombit.net/releases/Botan-1.10.17.tgz>`_
+`(sig) <https://botan.randombit.net/releases/Botan-1.10.17.tgz.asc>`_
+released on 2017-10-02
 
 Find Enclosed
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -152,7 +148,7 @@ Public Key Cryptography
 
 * RSA signatures and encryption
 * DH and ECDH key agreement
-* Signature schemes ECDSA, DSA, ECGDSA, ECKCDSA, and GOST 34.10-2001
+* Signature schemes ECDSA, DSA, Ed25519, ECGDSA, ECKCDSA, SM2, and GOST 34.10-2001
 * Post-quantum signature scheme XMSS
 * Post-quantum key agreement schemes McEliece and NewHope
 * ElGamal encryption
@@ -163,12 +159,12 @@ Ciphers, hashes, MACs, and checksums
 
 * Authenticated cipher modes EAX, OCB, GCM, SIV, CCM, and ChaCha20Poly1305
 * Cipher modes CTR, CBC, XTS, CFB, and OFB
-* Block ciphers AES, Serpent, Blowfish, Twofish, Threefish-512,
-  DES/3DES, Noekeon, IDEA, CAST-128, XTEA, SEED, KASUMI, GOST 28147,
-  MISTY1, Lion, CAST-256
+* Block ciphers AES, ARIA, Blowfish, Camellia, CAST-128, CAST-256,
+  DES/3DES, GOST 28147, IDEA, KASUMI, Lion, MISTY1, Noekeon, SEED,
+  Serpent, SHACAL2, SM4, Threefish-512, Twofish, XTEA
 * Stream ciphers ChaCha20, Salsa20/XSalsa20, SHAKE-128, and RC4
 * Hash functions SHA-1, SHA-2, SHA-3, RIPEMD-160, Skein-512,
-  BLAKE2b, Tiger, Whirlpool, GOST 34.11, MD5, MD4
+  BLAKE2b, SM3, Tiger, Whirlpool, GOST 34.11, MD5, MD4
 * Hash function combiners Parallel and Comb4P
 * Authentication codes HMAC, CMAC, Poly1305, SipHash, GMAC, CBC-MAC, X9.19 DES-MAC
 * Non-cryptographic checksums Adler32, CRC24, and CRC32
@@ -185,6 +181,7 @@ Other Useful Things
 * Password hashing function bcrypt and passhash9 (custom PBKDF scheme)
 * SRP-6a password authenticated key exchange
 * Key derivation functions including HKDF, KDF2, SP 800-108, SP 800-56A, SP 800-56C
+* HOTP and TOTP algorithms
 * Format preserving encryption scheme FE1
 * Threshold secret sharing
 * RFC 3394 AES key wrap

@@ -1,6 +1,7 @@
 /*
 * TLS echo server using BSD sockets
 * (C) 2014 Jack Lloyd
+*     2017 René Korthaus, Rohde & Schwarz Cybersecurity
 *
 * Botan is released under the Simplified BSD License (see license.txt)
 */
@@ -10,11 +11,24 @@
 #if defined(BOTAN_HAS_TLS) && defined(BOTAN_TARGET_OS_HAS_SOCKETS)
 
 #include <botan/tls_server.h>
+#include <botan/tls_policy.h>
 #include <botan/hex.h>
+#include <botan/internal/os_utils.h>
 #include "credentials.h"
 
 #include <list>
 
+#if defined(BOTAN_TARGET_OS_IS_WINDOWS)
+#include <winsock2.h>
+#include <WS2tcpip.h>
+
+// definitions in tls_client.cpp
+int close(int fd);
+int read(int s, void* buf, size_t len);
+int send(int s, const uint8_t* buf, size_t len, int flags);
+
+typedef size_t ssize_t;
+#else
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/socket.h>
@@ -23,6 +37,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#endif
 
 #if !defined(MSG_NOSIGNAL)
    #define MSG_NOSIGNAL 0
@@ -33,7 +48,31 @@ namespace Botan_CLI {
 class TLS_Server final : public Command
    {
    public:
-      TLS_Server() : Command("tls_server cert key --port=443 --type=tcp --policy=") {}
+      TLS_Server() : Command("tls_server cert key --port=443 --type=tcp --policy= --dump-traces=")
+         {
+#if defined(BOTAN_TARGET_OS_IS_WINDOWS)
+         WSAData wsa_data;
+         WORD wsa_version = MAKEWORD(2, 2);
+
+         if(::WSAStartup(wsa_version, &wsa_data) != 0)
+            {
+            throw CLI_Error("WSAStartup() failed: " + std::to_string(WSAGetLastError()));
+            }
+
+         if(LOBYTE(wsa_data.wVersion) != 2 || HIBYTE(wsa_data.wVersion) != 2)
+            {
+            ::WSACleanup();
+            throw CLI_Error("Could not find a usable version of Winsock.dll");
+            }
+#endif
+         }
+
+      ~TLS_Server()
+         {
+#if defined(BOTAN_TARGET_OS_IS_WINDOWS)
+         ::WSACleanup();
+#endif
+         }
 
       void go() override
          {
@@ -41,6 +80,7 @@ class TLS_Server final : public Command
          const std::string server_key = get_arg("key");
          const int port = get_arg_sz("port");
          const std::string transport = get_arg("type");
+         const std::string dump_traces_to = get_arg("dump-traces");
 
          if(transport != "tcp" && transport != "udp")
             {
@@ -51,7 +91,6 @@ class TLS_Server final : public Command
 
          std::unique_ptr<Botan::TLS::Policy> policy;
          const std::string policy_file = get_arg("policy");
-         std::filebuf fb;
          if(policy_file.size() > 0)
             {
             std::ifstream policy_stream(policy_file);
@@ -72,13 +111,10 @@ class TLS_Server final : public Command
 
          Basic_Credentials_Manager creds(rng(), server_crt, server_key);
 
-         auto protocol_chooser = [](const std::vector<std::string>& protocols) -> std::string
+         auto protocol_chooser = [](const std::vector<std::string>&) -> std::string
             {
-            for(size_t i = 0; i != protocols.size(); ++i)
-               {
-               std::cout << "Client offered protocol " << i << " = " << protocols[i] << std::endl;
-               }
-            return "echo/1.0"; // too bad
+            // we ignore whatever the client sends here
+            return "echo/1.0";
             };
 
          output() << "Listening for new connections on " << transport << " port " << port << std::endl;
@@ -112,8 +148,9 @@ class TLS_Server final : public Command
 
             using namespace std::placeholders;
 
-            auto socket_write = is_tcp ? std::bind(&stream_socket_write, fd, _1, _2) :
-                                std::bind(&dgram_socket_write, fd, _1, _2);
+            auto socket_write = is_tcp ?
+               std::bind(&TLS_Server::stream_socket_write, this, fd, _1, _2) :
+               std::bind(&TLS_Server::dgram_socket_write, this, fd, _1, _2);
 
             std::string s;
             std::list<std::string> pending_output;
@@ -144,6 +181,16 @@ class TLS_Server final : public Command
                protocol_chooser,
                !is_tcp);
 
+            std::unique_ptr<std::ostream> dump_stream;
+
+            if(!dump_traces_to.empty())
+               {
+               uint64_t timestamp = Botan::OS::get_high_resolution_clock();
+               const std::string dump_file =
+                  dump_traces_to + "/tls_" + std::to_string(timestamp) + ".bin";
+               dump_stream.reset(new std::ofstream(dump_file.c_str()));
+               }
+
             try
                {
                while(!server.is_closed())
@@ -155,14 +202,19 @@ class TLS_Server final : public Command
 
                      if(got == -1)
                         {
-                        std::cout << "Error in socket read - " << strerror(errno) << std::endl;
+                        error_output() << "Error in socket read - " << std::strerror(errno) << std::endl;
                         break;
                         }
 
                      if(got == 0)
                         {
-                        std::cout << "EOF on socket" << std::endl;
+                        error_output() << "EOF on socket" << std::endl;
                         break;
+                        }
+
+                     if(dump_stream)
+                        {
+                        dump_stream->write(reinterpret_cast<const char*>(buf), got);
                         }
 
                      server.received_data(buf, got);
@@ -181,7 +233,7 @@ class TLS_Server final : public Command
                      }
                   catch(std::exception& e)
                      {
-                     std::cout << "Connection1 problem: " << e.what() << std::endl;
+                     error_output() << "Connection problem: " << e.what() << std::endl;
                      if(is_tcp)
                         {
                         ::close(fd);
@@ -238,37 +290,37 @@ class TLS_Server final : public Command
 
       bool handshake_complete(const Botan::TLS::Session& session)
          {
-         std::cout << "Handshake complete, " << session.version().to_string()
-                   << " using " << session.ciphersuite().to_string() << std::endl;
+         output() << "Handshake complete, " << session.version().to_string()
+                  << " using " << session.ciphersuite().to_string() << std::endl;
 
          if(!session.session_id().empty())
             {
-            std::cout << "Session ID " << Botan::hex_encode(session.session_id()) << std::endl;
+            output() << "Session ID " << Botan::hex_encode(session.session_id()) << std::endl;
             }
 
          if(!session.session_ticket().empty())
             {
-            std::cout << "Session ticket " << Botan::hex_encode(session.session_ticket()) << std::endl;
+            output() << "Session ticket " << Botan::hex_encode(session.session_ticket()) << std::endl;
             }
 
          return true;
          }
 
-      static void dgram_socket_write(int sockfd, const uint8_t buf[], size_t length)
+      void dgram_socket_write(int sockfd, const uint8_t buf[], size_t length)
          {
          ssize_t sent = ::send(sockfd, buf, length, MSG_NOSIGNAL);
 
          if(sent == -1)
             {
-            std::cout << "Error writing to socket - " << strerror(errno) << std::endl;
+            error_output() << "Error writing to socket - " << std::strerror(errno) << std::endl;
             }
          else if(sent != static_cast<ssize_t>(length))
             {
-            std::cout << "Packet of length " << length << " truncated to " << sent << std::endl;
+            error_output() << "Packet of length " << length << " truncated to " << sent << std::endl;
             }
          }
 
-      static void stream_socket_write(int sockfd, const uint8_t buf[], size_t length)
+      void stream_socket_write(int sockfd, const uint8_t buf[], size_t length)
          {
          while(length)
             {
@@ -293,7 +345,7 @@ class TLS_Server final : public Command
 
       void alert_received(Botan::TLS::Alert alert, const uint8_t[], size_t)
          {
-         std::cout << "Alert: " << alert.type_string() << std::endl;
+         output() << "Alert: " << alert.type_string() << std::endl;
          }
 
    };

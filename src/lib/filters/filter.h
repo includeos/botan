@@ -6,8 +6,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_FILTER_H__
-#define BOTAN_FILTER_H__
+#ifndef BOTAN_FILTER_H_
+#define BOTAN_FILTER_H_
 
 #include <botan/secmem.h>
 #include <vector>
@@ -18,7 +18,7 @@ namespace Botan {
 /**
 * This class represents general abstract filter objects.
 */
-class BOTAN_DLL Filter
+class BOTAN_PUBLIC_API(2,0) Filter
    {
    public:
       /**
@@ -37,13 +37,13 @@ class BOTAN_DLL Filter
       * Start a new message. Must be closed by end_msg() before another
       * message can be started.
       */
-      virtual void start_msg() {}
+      virtual void start_msg() { /* default empty */ }
 
       /**
       * Notify that the current message is finished; flush buffers and
       * do end-of-message processing (if any).
       */
-      virtual void end_msg() {}
+      virtual void end_msg() { /* default empty */ }
 
       /**
       * Check whether this filter is an attachable filter.
@@ -139,7 +139,7 @@ class BOTAN_DLL Filter
       Filter* get_next() const;
 
       secure_vector<uint8_t> m_write_queue;
-      std::vector<Filter*> m_next;
+      std::vector<Filter*> m_next; // not owned
       size_t m_port_num, m_filter_owns;
 
       // true if filter belongs to a pipe --> prohibit filter sharing!
@@ -149,7 +149,7 @@ class BOTAN_DLL Filter
 /**
 * This is the abstract Fanout_Filter base class.
 **/
-class BOTAN_DLL Fanout_Filter : public Filter
+class BOTAN_PUBLIC_API(2,0) Fanout_Filter : public Filter
    {
    protected:
       /**

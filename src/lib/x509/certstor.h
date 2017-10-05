@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_CERT_STORE_H__
-#define BOTAN_CERT_STORE_H__
+#ifndef BOTAN_CERT_STORE_H_
+#define BOTAN_CERT_STORE_H_
 
 #include <botan/x509cert.h>
 #include <botan/x509_crl.h>
@@ -16,7 +16,7 @@ namespace Botan {
 /**
 * Certificate Store Interface
 */
-class BOTAN_DLL Certificate_Store
+class BOTAN_PUBLIC_API(2,0) Certificate_Store
    {
    public:
       virtual ~Certificate_Store() = default;
@@ -71,7 +71,7 @@ class BOTAN_DLL Certificate_Store
 /**
 * In Memory Certificate Store
 */
-class BOTAN_DLL Certificate_Store_In_Memory : public Certificate_Store
+class BOTAN_PUBLIC_API(2,0) Certificate_Store_In_Memory final : public Certificate_Store
    {
    public:
       /**

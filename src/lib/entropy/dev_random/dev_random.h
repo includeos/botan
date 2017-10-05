@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_ENTROPY_SRC_DEVICE_H__
-#define BOTAN_ENTROPY_SRC_DEVICE_H__
+#ifndef BOTAN_ENTROPY_SRC_DEVICE_H_
+#define BOTAN_ENTROPY_SRC_DEVICE_H_
 
 #include <botan/entropy_src.h>
 #include <vector>
@@ -24,7 +24,7 @@ class Device_EntropySource final : public Entropy_Source
 
       size_t poll(RandomNumberGenerator& rng) override;
 
-      Device_EntropySource(const std::vector<std::string>& fsnames);
+      explicit Device_EntropySource(const std::vector<std::string>& fsnames);
 
       ~Device_EntropySource();
    private:

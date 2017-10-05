@@ -17,7 +17,7 @@ namespace {
 
 #if defined(BOTAN_HAS_ELGAMAL)
 
-class ElGamal_KAT_Tests : public PK_Encryption_Decryption_Test
+class ElGamal_KAT_Tests final : public PK_Encryption_Decryption_Test
    {
    public:
       ElGamal_KAT_Tests()
@@ -40,12 +40,12 @@ class ElGamal_KAT_Tests : public PK_Encryption_Decryption_Test
          }
    };
 
-class ElGamal_Keygen_Tests : public PK_Key_Generation_Test
+class ElGamal_Keygen_Tests final : public PK_Key_Generation_Test
    {
    public:
       std::vector<std::string> keygen_params() const override
          {
-         return { "modp/ietf/1024", "modp/ietf/2048" };
+         return { "modp/ietf/1024" };
          }
       std::string algo_name() const override
          {

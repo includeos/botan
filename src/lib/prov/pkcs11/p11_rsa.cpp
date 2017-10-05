@@ -14,6 +14,7 @@
 #include <botan/pk_ops.h>
 #include <botan/rng.h>
 #include <botan/blinding.h>
+#include <botan/pow_mod.h>
 
 namespace Botan {
 
@@ -75,12 +76,14 @@ PKCS11_RSA_PrivateKey::PKCS11_RSA_PrivateKey(Session& session, uint32_t bits,
    pub_key_props.set_verify(true);
    pub_key_props.set_token(false);	// don't create a persistent public key object
 
-   ObjectHandle pub_key_handle = 0;
-   m_handle = 0;
+   ObjectHandle pub_key_handle = CK_INVALID_HANDLE;
+   ObjectHandle priv_key_handle = CK_INVALID_HANDLE;
    Mechanism mechanism = { static_cast< CK_MECHANISM_TYPE >(MechanismType::RsaPkcsKeyPairGen), nullptr, 0 };
    session.module()->C_GenerateKeyPair(session.handle(), &mechanism,
                                        pub_key_props.data(), pub_key_props.count(), priv_key_props.data(), priv_key_props.count(),
-                                       &pub_key_handle, &m_handle);
+                                       &pub_key_handle, &priv_key_handle);
+
+   this->reset_handle(priv_key_handle);
 
    m_n = BigInt::decode(get_attribute_value(AttributeType::Modulus));
    m_e = BigInt::decode(get_attribute_value(AttributeType::PublicExponent));
@@ -163,7 +166,7 @@ class PKCS11_RSA_Decryption_Operation final : public PK_Ops::Decryption
 
 // note:	multiple-part encryption operations (with C_EncryptUpdate/C_EncryptFinal)
 //			are not supported (PK_Ops::Encryption does not provide an `update` method)
-class PKCS11_RSA_Encryption_Operation : public PK_Ops::Encryption
+class PKCS11_RSA_Encryption_Operation final : public PK_Ops::Encryption
    {
    public:
 
@@ -194,7 +197,7 @@ class PKCS11_RSA_Encryption_Operation : public PK_Ops::Encryption
    };
 
 
-class PKCS11_RSA_Signature_Operation : public PK_Ops::Signature
+class PKCS11_RSA_Signature_Operation final : public PK_Ops::Signature
    {
    public:
 
@@ -249,7 +252,7 @@ class PKCS11_RSA_Signature_Operation : public PK_Ops::Signature
    };
 
 
-class PKCS11_RSA_Verification_Operation : public PK_Ops::Verification
+class PKCS11_RSA_Verification_Operation final : public PK_Ops::Verification
    {
    public:
 

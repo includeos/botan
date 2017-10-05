@@ -7,11 +7,21 @@
 #include "tests.h"
 
 #include <sstream>
+#include <fstream>
 #include <iomanip>
 #include <botan/hex.h>
+#include <botan/parsing.h>
 #include <botan/internal/filesystem.h>
 #include <botan/internal/bit_ops.h>
 #include <botan/internal/stl_util.h>
+
+#if defined(BOTAN_HAS_BIGINT)
+   #include <botan/bigint.h>
+#endif
+
+#if defined(BOTAN_HAS_EC_CURVE_GFP)
+   #include <botan/point_gfp.h>
+#endif
 
 namespace Botan_Tests {
 
@@ -233,7 +243,14 @@ bool Test::Result::test_eq(const std::string& what, size_t produced, size_t expe
    return test_is_eq(what, produced, expected);
    }
 
-bool Test::Result::test_eq(const std::string& what, OctetString produced, OctetString expected)
+bool Test::Result::test_eq_sz(const std::string& what, size_t produced, size_t expected)
+   {
+   return test_is_eq(what, produced, expected);
+   }
+
+bool Test::Result::test_eq(const std::string& what,
+                           Botan::OctetString produced,
+                           Botan::OctetString expected)
    {
    std::ostringstream out;
    out << m_who << " " << what;
@@ -872,45 +889,13 @@ std::string strip_ws(const std::string& in)
    return in.substr(first_c, last_c - first_c + 1);
    }
 
-std::vector<Botan::CPUID::CPUID_bits> map_cpuid_string(const std::string& tok)
-   {
-#if defined(BOTAN_TARGET_CPU_IS_X86_FAMILY)
-   if(tok == "sse2" || tok == "simd")
-      return {Botan::CPUID::CPUID_SSE2_BIT};
-   if(tok == "ssse3")
-      return {Botan::CPUID::CPUID_SSSE3_BIT};
-   if(tok == "aesni")
-      return {Botan::CPUID::CPUID_AESNI_BIT};
-   if(tok == "clmul")
-      return {Botan::CPUID::CPUID_CLMUL_BIT};
-   if(tok == "avx2")
-      return {Botan::CPUID::CPUID_AVX2_BIT};
-   if(tok == "sha")
-      return {Botan::CPUID::CPUID_SHA_BIT};
-#endif
-
-#if defined(BOTAN_TARGET_CPU_IS_PPC_FAMILY)
-   if(tok == "altivec" || tok == "simd")
-      return {Botan::CPUID::CPUID_ALTIVEC_BIT};
-#endif
-
-#if defined(BOTAN_TARGET_CPU_IS_ARM_FAMILY)
-   if(tok == "neon" || tok == "simd")
-      return {Botan::CPUID::CPUID_ARM_NEON_BIT};
-#endif
-
-   BOTAN_UNUSED(tok);
-
-   return {};
-   }
-
 std::vector<Botan::CPUID::CPUID_bits>
 parse_cpuid_bits(const std::vector<std::string>& tok)
    {
    std::vector<Botan::CPUID::CPUID_bits> bits;
    for(size_t i = 1; i < tok.size(); ++i)
       {
-      const std::vector<Botan::CPUID::CPUID_bits> more = map_cpuid_string(tok[i]);
+      const std::vector<Botan::CPUID::CPUID_bits> more = Botan::CPUID::bit_from_string(tok[i]);
       bits.insert(bits.end(), more.begin(), more.end());
       }
 
@@ -997,11 +982,11 @@ std::vector<Test::Result> Text_Based_Test::run()
          {
          try
             {
-            if(possible_providers(header).empty() ||
-                  skip_this_test(header, vars))
-               {
+            if(skip_this_test(header, vars))
                continue;
-               }
+
+            if(possible_providers(header).empty())
+               continue;
 
             ++test_cnt;
 
@@ -1025,7 +1010,10 @@ std::vector<Test::Result> Text_Based_Test::run()
 
             if(result.tests_failed())
                {
-               result.test_note("Test #" + std::to_string(test_cnt) + " failed");
+               if(header.empty())
+                  result.test_note("Test #" + std::to_string(test_cnt) + " failed");
+               else
+                  result.test_note("Test #" + std::to_string(test_cnt) + " " + header + " failed");
                }
             results.push_back(result);
             }

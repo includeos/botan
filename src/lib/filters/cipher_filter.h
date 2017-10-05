@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_TRANSFORM_FILTER_H__
-#define BOTAN_TRANSFORM_FILTER_H__
+#ifndef BOTAN_TRANSFORM_FILTER_H_
+#define BOTAN_TRANSFORM_FILTER_H_
 
 #include <botan/cipher_mode.h>
 #include <botan/key_filt.h>
@@ -17,7 +17,7 @@ namespace Botan {
 /**
 * Filter interface for cipher modes
 */
-class BOTAN_DLL Cipher_Mode_Filter : public Keyed_Filter,
+class BOTAN_PUBLIC_API(2,0) Cipher_Mode_Filter final : public Keyed_Filter,
                                      private Buffered_Filter
    {
    public:
@@ -32,11 +32,6 @@ class BOTAN_DLL Cipher_Mode_Filter : public Keyed_Filter,
       bool valid_iv_length(size_t length) const override;
 
       std::string name() const override;
-
-   protected:
-      const Cipher_Mode& get_mode() const { return *m_mode; }
-
-      Cipher_Mode& get_mode() { return *m_mode; }
 
    private:
       void write(const uint8_t input[], size_t input_length) override;

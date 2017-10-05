@@ -28,6 +28,7 @@ bcrypt
 # required for private key encryption
 pbes2
 
+ed25519
 curve25519
 ecdh
 ecdsa
@@ -48,15 +49,23 @@ ffi
 tls
 prf_tls
 newhope
+ed25519
 
 clmul
 locking_allocator
+http_util # needed by x509 for OCSP online checks
 
 aes_ni
 aes_ssse3
 serpent_simd
 threefish_avx2
 chacha_sse2
+
+sha1_sse2
+sha1_x86
+sha1_armv8
+sha2_32_x86
+sha2_32_armv8
 
 simd
 
@@ -67,7 +76,6 @@ rdrand_rng
 system_rng
 
 # entropy sources
-cryptoapi_rng
 darwin_secrandom
 dev_random
 proc_walk

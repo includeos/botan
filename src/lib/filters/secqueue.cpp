@@ -14,7 +14,7 @@ namespace Botan {
 /**
 * A node in a SecureQueue
 */
-class SecureQueueNode
+class SecureQueueNode final
    {
    public:
       SecureQueueNode() : m_buffer(DEFAULT_BUFFERSIZE)
@@ -103,6 +103,9 @@ void SecureQueue::destroy()
 */
 SecureQueue& SecureQueue::operator=(const SecureQueue& input)
    {
+   if(this == &input)
+      return *this;
+
    destroy();
    m_bytes_read = input.get_bytes_read();
    m_head = m_tail = new SecureQueueNode;

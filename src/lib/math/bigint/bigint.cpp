@@ -7,10 +7,9 @@
 
 #include <botan/bigint.h>
 #include <botan/internal/mp_core.h>
-#include <botan/loadstor.h>
-#include <botan/parsing.h>
 #include <botan/internal/rounding.h>
 #include <botan/internal/bit_ops.h>
+#include <botan/internal/ct_utils.h>
 
 namespace Botan {
 
@@ -69,7 +68,7 @@ BigInt::BigInt(const std::string& str)
       base = Hexadecimal;
       }
 
-   *this = decode(reinterpret_cast<const uint8_t*>(str.data()) + markers,
+   *this = decode(cast_char_ptr_to_uint8(str.data()) + markers,
                   str.length() - markers, base);
 
    if(negative) set_sign(Negative);
@@ -293,6 +292,34 @@ void BigInt::binary_decode(const uint8_t buf[], size_t length)
 
    for(size_t i = 0; i != length % WORD_BYTES; ++i)
       m_reg[length / WORD_BYTES] = (m_reg[length / WORD_BYTES] << 8) | buf[i];
+   }
+
+void BigInt::shrink_to_fit()
+   {
+   m_reg.resize(sig_words());
+   }
+
+void BigInt::const_time_lookup(secure_vector<word>& output,
+                               const std::vector<BigInt>& vec,
+                               size_t idx)
+   {
+   const size_t words = output.size();
+
+   clear_mem(output.data(), output.size());
+
+   CT::poison(&idx, sizeof(idx));
+
+   for(size_t i = 0; i != vec.size(); ++i)
+      {
+      BOTAN_ASSERT(vec[i].size() >= words,
+                   "Word size as expected in const_time_lookup");
+
+      for(size_t w = 0; w != words; ++w)
+         output[w] |= CT::select<word>(CT::is_equal(i, idx), vec[i].word_at(w), 0);
+      }
+
+   CT::unpoison(idx);
+   CT::unpoison(output.data(), output.size());
    }
 
 }

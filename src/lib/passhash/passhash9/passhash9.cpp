@@ -6,6 +6,7 @@
 */
 
 #include <botan/passhash9.h>
+#include <botan/rng.h>
 #include <botan/loadstor.h>
 #include <botan/pbkdf2.h>
 #include <botan/base64.h>
@@ -122,9 +123,18 @@ bool check_passhash9(const std::string& pass, const std::string& hash)
       &bin[ALGID_BYTES + WORKFACTOR_BYTES], SALT_BYTES,
       kdf_iterations).bits_of();
 
-   return same_mem(cmp.data(),
+   return constant_time_compare(cmp.data(),
                    &bin[ALGID_BYTES + WORKFACTOR_BYTES + SALT_BYTES],
                    PASSHASH9_PBKDF_OUTPUT_LEN);
+   }
+
+bool is_passhash9_alg_supported(uint8_t alg_id)
+   {
+   if (get_pbkdf_prf(alg_id))
+      {
+      return true;
+      }
+   return false;
    }
 
 }

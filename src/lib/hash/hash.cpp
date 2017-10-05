@@ -7,6 +7,7 @@
 
 #include <botan/hash.h>
 #include <botan/scan_name.h>
+#include <botan/exceptn.h>
 
 #if defined(BOTAN_HAS_ADLER32)
   #include <botan/adler32.h>
@@ -64,6 +65,10 @@
   #include <botan/skein_512.h>
 #endif
 
+#if defined(BOTAN_HAS_STREEBOG)
+  #include <botan/streebog.h>
+#endif
+
 #if defined(BOTAN_HAS_SM3)
   #include <botan/sm3.h>
 #endif
@@ -88,6 +93,10 @@
   #include <botan/blake2b.h>
 #endif
 
+#if defined(BOTAN_HAS_BEARSSL)
+  #include <botan/internal/bearssl.h>
+#endif
+
 #if defined(BOTAN_HAS_OPENSSL)
   #include <botan/internal/openssl.h>
 #endif
@@ -101,6 +110,17 @@ std::unique_ptr<HashFunction> HashFunction::create(const std::string& algo_spec,
    if(provider.empty() || provider == "openssl")
       {
       if(auto hash = make_openssl_hash(algo_spec))
+         return hash;
+
+      if(!provider.empty())
+         return nullptr;
+      }
+#endif
+
+#if defined(BOTAN_HAS_BEARSSL)
+   if(provider.empty() || provider == "bearssl")
+      {
+      if(auto hash = make_bearssl_hash(algo_spec))
          return hash;
 
       if(!provider.empty())
@@ -261,6 +281,17 @@ std::unique_ptr<HashFunction> HashFunction::create(const std::string& algo_spec,
       }
 #endif
 
+#if defined(BOTAN_HAS_STREEBOG)
+   if(algo_spec == "Streebog-256")
+      {
+      return std::unique_ptr<HashFunction>(new Streebog_256);
+      }
+   if(algo_spec == "Streebog-512")
+      {
+      return std::unique_ptr<HashFunction>(new Streebog_512);
+      }
+#endif
+
 #if defined(BOTAN_HAS_SM3)
    if(algo_spec == "SM3")
       {
@@ -323,7 +354,7 @@ HashFunction::create_or_throw(const std::string& algo,
 
 std::vector<std::string> HashFunction::providers(const std::string& algo_spec)
    {
-   return probe_providers_of<HashFunction>(algo_spec, {"base", "openssl"});
+   return probe_providers_of<HashFunction>(algo_spec, {"base", "bearssl", "openssl"});
    }
 
 }

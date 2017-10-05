@@ -1,6 +1,7 @@
 /*
 * Sketchy HTTP client
 * (C) 2013,2016 Jack Lloyd
+*     2017 René Korthaus, Rohde & Schwarz Cybersecurity
 *
 * Botan is released under the Simplified BSD License (see license.txt)
 */
@@ -8,28 +9,10 @@
 #include <botan/http_util.h>
 #include <botan/parsing.h>
 #include <botan/hex.h>
+#include <botan/internal/os_utils.h>
+#include <botan/internal/socket.h>
 #include <botan/internal/stl_util.h>
 #include <sstream>
-
-#if defined(BOTAN_HAS_BOOST_ASIO)
-
-  /*
-  * We don't need serial port support anyway, and asking for it
-  * causes macro conflicts with Darwin's termios.h when this
-  * file is included in the amalgamation. GH #350
-  */
-  #define BOOST_ASIO_DISABLE_SERIAL_PORT
-  #include <boost/asio.hpp>
-
-#elif defined(BOTAN_TARGET_OS_HAS_SOCKETS)
-  #include <sys/types.h>
-  #include <sys/socket.h>
-  #include <netdb.h>
-  #include <unistd.h>
-  #include <netinet/in.h>
-#else
-  //#warning "No network support enabled in http_util"
-#endif
 
 namespace Botan {
 
@@ -44,89 +27,36 @@ namespace {
 std::string http_transact(const std::string& hostname,
                           const std::string& message)
    {
-#if defined(BOTAN_HAS_BOOST_ASIO)
-   using namespace boost::asio::ip;
+   std::unique_ptr<OS::Socket> socket;
 
-   boost::asio::ip::tcp::iostream tcp;
-
-   tcp.connect(hostname, "http");
-
-   if(!tcp)
-      throw HTTP_Error("HTTP connection to " + hostname + " failed");
-
-   tcp << message;
-   tcp.flush();
-
-   std::ostringstream oss;
-   oss << tcp.rdbuf();
-
-   return oss.str();
-#elif defined(BOTAN_TARGET_OS_HAS_SOCKETS)
-
-   hostent* host_addr = ::gethostbyname(hostname.c_str());
-   uint16_t port = 80;
-
-   if(!host_addr)
-      throw HTTP_Error("Name resolution failed for " + hostname);
-
-   if(host_addr->h_addrtype != AF_INET) // FIXME
-      throw HTTP_Error("Hostname " + hostname + " resolved to non-IPv4 address");
-
-   struct socket_raii {
-      socket_raii(int fd) : m_fd(fd) {}
-      ~socket_raii() { ::close(m_fd); }
-      int m_fd;
-      };
-
-   int fd = ::socket(PF_INET, SOCK_STREAM, 0);
-   if(fd == -1)
-      throw HTTP_Error("Unable to create TCP socket");
-   socket_raii raii(fd);
-
-   sockaddr_in socket_info;
-   ::memset(&socket_info, 0, sizeof(socket_info));
-   socket_info.sin_family = AF_INET;
-   socket_info.sin_port = htons(port);
-
-   ::memcpy(&socket_info.sin_addr,
-            host_addr->h_addr,
-            host_addr->h_length);
-
-   socket_info.sin_addr = *reinterpret_cast<struct in_addr*>(host_addr->h_addr); // FIXME
-
-   if(::connect(fd, reinterpret_cast<sockaddr*>(&socket_info), sizeof(struct sockaddr)) != 0)
-      throw HTTP_Error("HTTP connection to " + hostname + " failed");
-
-   size_t sent_so_far = 0;
-   while(sent_so_far != message.size())
+   try
       {
-      size_t left = message.size() - sent_so_far;
-      ssize_t sent = ::write(fd, &message[sent_so_far], left);
-
-      if(sent < 0)
-         throw HTTP_Error("write to HTTP server failed, error '" + std::string(::strerror(errno)) + "'");
-      else
-         sent_so_far += static_cast<size_t>(sent);
+      socket = OS::open_socket(hostname, "http");
+      if(!socket)
+         throw Exception("No socket support enabled in build");
+      }
+   catch(std::exception& e)
+      {
+      throw HTTP_Error("HTTP connection to " + hostname + " failed: " + e.what());
       }
 
+   // Blocks until entire message has been written
+   socket->write(cast_char_ptr_to_uint8(message.data()),
+                 message.size());
+
    std::ostringstream oss;
-   std::vector<char> buf(1024); // arbitrary size
+   std::vector<uint8_t> buf(BOTAN_DEFAULT_BUFFER_SIZE);
    while(true)
       {
-      ssize_t got = ::read(fd, buf.data(), buf.size());
+      const size_t got = socket->read(buf.data(), buf.size());
+      if(got == 0) // EOF
+         break;
 
-      if(got < 0)
-         throw HTTP_Error("read from HTTP server failed, error '" + std::string(::strerror(errno)) + "'");
-      else if(got > 0)
-         oss.write(buf.data(), static_cast<std::streamsize>(got));
-      else
-         break; // EOF
+      oss.write(cast_uint8_ptr_to_char(buf.data()),
+                static_cast<std::streamsize>(got));
       }
-   return oss.str();
 
-#else
-   throw HTTP_Error("Cannot connect to " + hostname + ": network code disabled in build");
-#endif
+   return oss.str();
    }
 
 }
@@ -146,7 +76,7 @@ std::string url_encode(const std::string& in)
       else if(c == '-' || c == '_' || c == '.' || c == '~')
          out << c;
       else
-         out << '%' << hex_encode(reinterpret_cast<uint8_t*>(&c), 1);
+         out << '%' << hex_encode(cast_char_ptr_to_uint8(&c), 1);
       }
 
    return out.str();
@@ -158,7 +88,7 @@ std::ostream& operator<<(std::ostream& o, const Response& resp)
    for(auto h : resp.headers())
       o << "Header '" << h.first << "' = '" << h.second << "'\n";
    o << "Body " << std::to_string(resp.body().size()) << " bytes:\n";
-   o.write(reinterpret_cast<const char*>(&resp.body()[0]), resp.body().size());
+   o.write(cast_uint8_ptr_to_char(resp.body().data()), resp.body().size());
    return o;
    }
 
@@ -207,7 +137,7 @@ Response http_sync(http_exch_fn http_transact,
    if(!content_type.empty())
       outbuf << "Content-Type: " << content_type << "\r\n";
    outbuf << "Connection: close\r\n\r\n";
-   outbuf.write(reinterpret_cast<const char*>(body.data()), body.size());
+   outbuf.write(cast_uint8_ptr_to_char(body.data()), body.size());
 
    std::istringstream io(http_transact(hostname, outbuf.str()));
 
@@ -255,7 +185,7 @@ Response http_sync(http_exch_fn http_transact,
    std::vector<uint8_t> buf(4096);
    while(io.good())
       {
-      io.read(reinterpret_cast<char*>(buf.data()), buf.size());
+      io.read(cast_uint8_ptr_to_char(buf.data()), buf.size());
       resp_body.insert(resp_body.end(), buf.data(), &buf[io.gcount()]);
       }
 

@@ -10,7 +10,6 @@
 #include <botan/aes.h>
 #include <botan/loadstor.h>
 #include <botan/cpuid.h>
-#include <botan/internal/bit_ops.h>
 
 /*
 * This implementation is based on table lookups which are known to be
@@ -95,7 +94,7 @@ const uint8_t SD[256] = {
    0x17, 0x2B, 0x04, 0x7E, 0xBA, 0x77, 0xD6, 0x26, 0xE1, 0x69, 0x14, 0x63,
    0x55, 0x21, 0x0C, 0x7D };
 
-inline uint8_t xtime(uint8_t s) { return (s << 1) ^ ((s >> 7) * 0x1B); }
+inline uint8_t xtime(uint8_t s) { return static_cast<uint8_t>(s << 1) ^ ((s >> 7) * 0x1B); }
 inline uint8_t xtime4(uint8_t s) { return xtime(xtime(s)); }
 inline uint8_t xtime8(uint8_t s) { return xtime(xtime(xtime(s))); }
 
@@ -168,7 +167,7 @@ void aes_encrypt_n(const uint8_t in[], uint8_t out[],
       }
    Z &= TE[82]; // this is zero, which hopefully the compiler cannot deduce
 
-   BOTAN_PARALLEL_FOR(size_t i = 0; i < blocks; ++i)
+   for(size_t i = 0; i < blocks; ++i)
       {
       uint32_t T0, T1, T2, T3;
       load_be(in + 16*i, T0, T1, T2, T3);
@@ -355,8 +354,9 @@ void aes_key_schedule(const uint8_t key[], size_t length,
 
    const size_t X = length / 4;
 
-   // Make clang-analyzer happy
-   BOTAN_ASSERT(X == 4 || X == 6 || X == 8, "Valid AES key size");
+   // Can't happen, but make static analyzers happy
+   if(X != 4 && X != 6 && X != 8)
+      throw Invalid_Argument("Invalid AES key size");
 
    for(size_t i = 0; i != X; ++i)
       XEK[i] = load_be<uint32_t>(key, i);
@@ -412,6 +412,31 @@ void aes_key_schedule(const uint8_t key[], size_t length,
    DK.resize(length + 24);
    copy_mem(EK.data(), XEK.data(), EK.size());
    copy_mem(DK.data(), XDK.data(), DK.size());
+
+#if defined(BOTAN_HAS_AES_ARMV8)
+   if(CPUID::has_arm_aes())
+      {
+      // ARM needs the subkeys to be byte reversed
+
+      for(size_t i = 0; i != EK.size(); ++i)
+         EK[i] = reverse_bytes(EK[i]);
+      for(size_t i = 0; i != DK.size(); ++i)
+         DK[i] = reverse_bytes(DK[i]);
+      }
+#endif
+
+   }
+
+size_t aes_parallelism()
+   {
+#if defined(BOTAN_HAS_AES_NI)
+   if(CPUID::has_aes_ni())
+      {
+      return 4;
+      }
+#endif
+
+   return 1;
    }
 
 const char* aes_provider()
@@ -430,6 +455,13 @@ const char* aes_provider()
       }
 #endif
 
+#if defined(BOTAN_HAS_AES_ARMV8)
+   if(CPUID::has_arm_aes())
+      {
+      return "armv8";
+      }
+#endif
+
    return "base";
    }
 
@@ -438,6 +470,10 @@ const char* aes_provider()
 std::string AES_128::provider() const { return aes_provider(); }
 std::string AES_192::provider() const { return aes_provider(); }
 std::string AES_256::provider() const { return aes_provider(); }
+
+size_t AES_128::parallelism() const { return aes_parallelism(); }
+size_t AES_192::parallelism() const { return aes_parallelism(); }
+size_t AES_256::parallelism() const { return aes_parallelism(); }
 
 void AES_128::encrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
    {
@@ -452,6 +488,13 @@ void AES_128::encrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
    if(CPUID::has_ssse3())
       {
       return ssse3_encrypt_n(in, out, blocks);
+      }
+#endif
+
+#if defined(BOTAN_HAS_AES_ARMV8)
+   if(CPUID::has_arm_aes())
+      {
+      return armv8_encrypt_n(in, out, blocks);
       }
 #endif
 
@@ -471,6 +514,13 @@ void AES_128::decrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
    if(CPUID::has_ssse3())
       {
       return ssse3_decrypt_n(in, out, blocks);
+      }
+#endif
+
+#if defined(BOTAN_HAS_AES_ARMV8)
+   if(CPUID::has_arm_aes())
+      {
+      return armv8_decrypt_n(in, out, blocks);
       }
 #endif
 
@@ -520,6 +570,13 @@ void AES_192::encrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
       }
 #endif
 
+#if defined(BOTAN_HAS_AES_ARMV8)
+   if(CPUID::has_arm_aes())
+      {
+      return armv8_encrypt_n(in, out, blocks);
+      }
+#endif
+
    aes_encrypt_n(in, out, blocks, m_EK, m_ME);
    }
 
@@ -536,6 +593,13 @@ void AES_192::decrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
    if(CPUID::has_ssse3())
       {
       return ssse3_decrypt_n(in, out, blocks);
+      }
+#endif
+
+#if defined(BOTAN_HAS_AES_ARMV8)
+   if(CPUID::has_arm_aes())
+      {
+      return armv8_decrypt_n(in, out, blocks);
       }
 #endif
 
@@ -585,6 +649,13 @@ void AES_256::encrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
       }
 #endif
 
+#if defined(BOTAN_HAS_AES_ARMV8)
+   if(CPUID::has_arm_aes())
+      {
+      return armv8_encrypt_n(in, out, blocks);
+      }
+#endif
+
    aes_encrypt_n(in, out, blocks, m_EK, m_ME);
    }
 
@@ -601,6 +672,13 @@ void AES_256::decrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
    if(CPUID::has_ssse3())
       {
       return ssse3_decrypt_n(in, out, blocks);
+      }
+#endif
+
+#if defined(BOTAN_HAS_AES_ARMV8)
+   if(CPUID::has_arm_aes())
+      {
+      return armv8_decrypt_n(in, out, blocks);
       }
 #endif
 

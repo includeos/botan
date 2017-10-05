@@ -6,10 +6,14 @@
 */
 
 #include <botan/sha3.h>
-#include <botan/parsing.h>
 #include <botan/exceptn.h>
 
 namespace Botan {
+
+std::unique_ptr<HashFunction> SHA_3::copy_state() const
+   {
+   return std::unique_ptr<HashFunction>(new SHA_3(*this));
+   }
 
 //static
 void SHA_3::permute(uint64_t A[25])

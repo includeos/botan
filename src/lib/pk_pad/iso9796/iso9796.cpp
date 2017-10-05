@@ -6,9 +6,11 @@
  */
 
 #include <botan/iso9796.h>
+#include <botan/rng.h>
+#include <botan/exceptn.h>
 #include <botan/mgf1.h>
-#include <botan/internal/bit_ops.h>
 #include <botan/hash_id.h>
+#include <botan/internal/bit_ops.h>
 #include <botan/internal/ct_utils.h>
 
 namespace Botan {
@@ -157,8 +159,13 @@ bool iso9796_verification(const secure_vector<uint8_t>& const_coded,
    //invalid, if delimiter 0x01 was not found or msg1_offset is too big
    bad_input |= waiting_for_delim;
    bad_input |= CT::is_less(coded.size(), tLength + HASH_SIZE + msg1_offset + SALT_SIZE);
+
    //in case that msg1_offset is too big, just continue with offset = 0. 
    msg1_offset = CT::select<size_t>(bad_input, 0, msg1_offset);
+
+   CT::unpoison(coded.data(), coded.size());
+   CT::unpoison(msg1_offset);
+
    secure_vector<uint8_t> msg1(coded.begin() + msg1_offset,
                             coded.end() - tLength - HASH_SIZE - SALT_SIZE);
    secure_vector<uint8_t> salt(coded.begin() + msg1_offset + msg1.size(),
@@ -197,9 +204,9 @@ bool iso9796_verification(const secure_vector<uint8_t>& const_coded,
    secure_vector<uint8_t> H2 = hash->final();
    
    //check if H3 == H2
-   bad_input |= CT::is_equal<uint8_t>(same_mem(H3.data(), H2.data(), HASH_SIZE), false);
-   CT::unpoison(coded.data(), coded.size());
+   bad_input |= CT::is_equal<uint8_t>(constant_time_compare(H3.data(), H2.data(), HASH_SIZE), false);
    
+   CT::unpoison(bad_input);
    return (bad_input == 0);
    }
 

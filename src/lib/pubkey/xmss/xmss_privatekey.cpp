@@ -15,8 +15,9 @@
  * Botan is released under the Simplified BSD License (see license.txt)
  **/
 
-#include <botan/internal/xmss_signature_operation.h>
 #include <botan/xmss_privatekey.h>
+#include <botan/internal/xmss_signature_operation.h>
+#include <cmath>
 
 namespace Botan {
 
@@ -26,7 +27,7 @@ XMSS_PrivateKey::XMSS_PrivateKey(const secure_vector<uint8_t>& raw_key)
      m_wots_priv_key(m_wots_params.oid(), m_public_seed),
      m_index_reg(XMSS_Index_Registry::get_instance())
    {
-   BOTAN_ASSERT(sizeof(size_t) >= ceil(
+   BOTAN_ASSERT(sizeof(size_t) >= std::ceil(
       static_cast<float>(XMSS_PublicKey::m_xmss_params.tree_height()) / 8.f),
       "System type \"size_t\" not big enough to support"
       " leaf index.");

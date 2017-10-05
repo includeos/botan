@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_BUFFERED_COMPUTATION_H__
-#define BOTAN_BUFFERED_COMPUTATION_H__
+#ifndef BOTAN_BUFFERED_COMPUTATION_H_
+#define BOTAN_BUFFERED_COMPUTATION_H_
 
 #include <botan/secmem.h>
 #include <botan/loadstor.h>
@@ -18,7 +18,7 @@ namespace Botan {
 * This class represents any kind of computation which uses an internal
 * state, such as hash functions or MACs
 */
-class BOTAN_DLL Buffered_Computation
+class BOTAN_PUBLIC_API(2,0) Buffered_Computation
    {
    public:
       /**
@@ -71,7 +71,7 @@ class BOTAN_DLL Buffered_Computation
       */
       void update(const std::string& str)
          {
-         add_data(reinterpret_cast<const uint8_t*>(str.data()), str.size());
+         add_data(cast_char_ptr_to_uint8(str.data()), str.size());
          }
 
       /**
@@ -163,7 +163,7 @@ class BOTAN_DLL Buffered_Computation
          return final();
          }
 
-      virtual ~Buffered_Computation() {}
+      virtual ~Buffered_Computation() = default;
    private:
       /**
       * Add more data to the computation

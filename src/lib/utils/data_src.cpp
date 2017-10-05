@@ -95,8 +95,8 @@ bool DataSource_Memory::end_of_data() const
 * DataSource_Memory Constructor
 */
 DataSource_Memory::DataSource_Memory(const std::string& in) :
-   m_source(reinterpret_cast<const uint8_t*>(in.data()),
-          reinterpret_cast<const uint8_t*>(in.data()) + in.length()),
+   m_source(cast_char_ptr_to_uint8(in.data()),
+            cast_char_ptr_to_uint8(in.data()) + in.length()),
    m_offset(0)
    {
    }
@@ -106,11 +106,11 @@ DataSource_Memory::DataSource_Memory(const std::string& in) :
 */
 size_t DataSource_Stream::read(uint8_t out[], size_t length)
    {
-   m_source.read(reinterpret_cast<char*>(out), length);
+   m_source.read(cast_uint8_ptr_to_char(out), length);
    if(m_source.bad())
       throw Stream_IO_Error("DataSource_Stream::read: Source failure");
 
-   size_t got = m_source.gcount();
+   const size_t got = static_cast<size_t>(m_source.gcount());
    m_total_read += got;
    return got;
    }
@@ -119,7 +119,7 @@ bool DataSource_Stream::check_available(size_t n)
    {
    const std::streampos orig_pos = m_source.tellg();
    m_source.seekg(0, std::ios::end);
-   const size_t avail = m_source.tellg() - orig_pos;
+   const size_t avail = static_cast<size_t>(m_source.tellg() - orig_pos);
    m_source.seekg(orig_pos);
    return (avail >= n);
    }
@@ -137,18 +137,18 @@ size_t DataSource_Stream::peek(uint8_t out[], size_t length, size_t offset) cons
    if(offset)
       {
       secure_vector<uint8_t> buf(offset);
-      m_source.read(reinterpret_cast<char*>(buf.data()), buf.size());
+      m_source.read(cast_uint8_ptr_to_char(buf.data()), buf.size());
       if(m_source.bad())
          throw Stream_IO_Error("DataSource_Stream::peek: Source failure");
-      got = m_source.gcount();
+      got = static_cast<size_t>(m_source.gcount());
       }
 
    if(got == offset)
       {
-      m_source.read(reinterpret_cast<char*>(out), length);
+      m_source.read(cast_uint8_ptr_to_char(out), length);
       if(m_source.bad())
          throw Stream_IO_Error("DataSource_Stream::peek: Source failure");
-      got = m_source.gcount();
+      got = static_cast<size_t>(m_source.gcount());
       }
 
    if(m_source.eof())

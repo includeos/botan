@@ -5,10 +5,10 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_BER_DECODER_H__
-#define BOTAN_BER_DECODER_H__
+#ifndef BOTAN_BER_DECODER_H_
+#define BOTAN_BER_DECODER_H_
 
-#include <botan/asn1_oid.h>
+#include <botan/asn1_obj.h>
 #include <botan/data_src.h>
 
 namespace Botan {
@@ -16,7 +16,7 @@ namespace Botan {
 /**
 * BER Decoding Object
 */
-class BOTAN_DLL BER_Decoder
+class BOTAN_PUBLIC_API(2,0) BER_Decoder final
    {
    public:
       BER_Object get_next_object();
@@ -198,12 +198,12 @@ class BOTAN_DLL BER_Decoder
       explicit BER_Decoder(const std::vector<uint8_t>& vec);
 
       BER_Decoder(const BER_Decoder&);
-      ~BER_Decoder();
    private:
       BER_Decoder* m_parent;
-      DataSource* m_source;
       BER_Object m_pushed;
-      mutable bool m_owns;
+      // either m_data_src.get() or an unowned pointer
+      DataSource* m_source;
+      mutable std::unique_ptr<DataSource> m_data_src;
    };
 
 /*

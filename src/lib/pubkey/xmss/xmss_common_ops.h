@@ -5,12 +5,11 @@
  * Botan is released under the Simplified BSD License (see license.txt)
  **/
 
-#ifndef BOTAN_XMSS_COMMON_OPS_H__
-#define BOTAN_XMSS_COMMON_OPS_H__
+#ifndef BOTAN_XMSS_COMMON_OPS_H_
+#define BOTAN_XMSS_COMMON_OPS_H_
 
 #include <vector>
 #include <botan/secmem.h>
-#include <botan/assert.h>
 #include <botan/xmss_parameters.h>
 #include <botan/xmss_address.h>
 #include <botan/xmss_hash.h>

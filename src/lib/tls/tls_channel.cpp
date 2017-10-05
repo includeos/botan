@@ -7,7 +7,9 @@
 */
 
 #include <botan/tls_channel.h>
+#include <botan/tls_policy.h>
 #include <botan/tls_messages.h>
+#include <botan/kdf.h>
 #include <botan/internal/tls_handshake_state.h>
 #include <botan/internal/tls_record.h>
 #include <botan/internal/tls_seq_numbers.h>
@@ -546,7 +548,7 @@ void Channel::send(const uint8_t buf[], size_t buf_size)
 
 void Channel::send(const std::string& string)
    {
-   this->send(reinterpret_cast<const uint8_t*>(string.c_str()), string.size());
+   this->send(cast_char_ptr_to_uint8(string.data()), string.size());
    }
 
 void Channel::send_alert(const Alert& alert)
@@ -600,7 +602,7 @@ void Channel::secure_renegotiation_check(const Server_Hello* server_hello)
 
    if(auto active = active_state())
       {
-      const bool active_sr = active->client_hello()->secure_renegotiation();
+      const bool active_sr = active->server_hello()->secure_renegotiation();
 
       if(active_sr != secure_renegotiation)
          throw TLS_Exception(Alert::HANDSHAKE_FAILURE,

@@ -21,7 +21,7 @@ namespace {
 
 #if defined(BOTAN_HAS_ECDSA)
 
-class ECDSA_Signature_KAT_Tests : public PK_Signature_Generation_Test
+class ECDSA_Signature_KAT_Tests final : public PK_Signature_Generation_Test
    {
    public:
       ECDSA_Signature_KAT_Tests() : PK_Signature_Generation_Test(
@@ -51,7 +51,10 @@ class ECDSA_Signature_KAT_Tests : public PK_Signature_Generation_Test
 
       std::string default_padding(const VarMap& vars) const override
          {
-         return "EMSA1(" + get_req_str(vars, "Hash") + ")";
+         const std::string hash = get_req_str(vars, "Hash");
+         if(hash.substr(0,3) == "Raw")
+            return hash;
+         return "EMSA1(" + hash + ")";
          }
 
 #if !defined(BOTAN_HAS_RFC6979)
@@ -64,7 +67,7 @@ class ECDSA_Signature_KAT_Tests : public PK_Signature_Generation_Test
 #endif
    };
 
-class ECDSA_Keygen_Tests : public PK_Key_Generation_Test
+class ECDSA_Keygen_Tests final : public PK_Key_Generation_Test
    {
    public:
       std::vector<std::string> keygen_params() const override
@@ -77,7 +80,7 @@ class ECDSA_Keygen_Tests : public PK_Key_Generation_Test
          }
    };
 
-class ECDSA_Invalid_Key_Tests : public Text_Based_Test
+class ECDSA_Invalid_Key_Tests final : public Text_Based_Test
    {
    public:
       ECDSA_Invalid_Key_Tests() :

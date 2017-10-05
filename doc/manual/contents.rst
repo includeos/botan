@@ -30,9 +30,11 @@ Contents
    compression
    pkcs11
    tpm
+   otp
    ffi
    python
    cli
    side_channels
    packaging
+   fuzzing
    support

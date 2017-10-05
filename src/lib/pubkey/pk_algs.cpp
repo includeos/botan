@@ -7,6 +7,7 @@
 
 #include <botan/pk_algs.h>
 #include <botan/oids.h>
+#include <botan/parsing.h>
 
 #if defined(BOTAN_HAS_RSA)
   #include <botan/rsa.h>
@@ -16,8 +17,16 @@
   #include <botan/dsa.h>
 #endif
 
+#if defined(BOTAN_HAS_DL_GROUP)
+  #include <botan/dl_group.h>
+#endif
+
 #if defined(BOTAN_HAS_DIFFIE_HELLMAN)
   #include <botan/dh.h>
+#endif
+
+#if defined(BOTAN_HAS_ECC_PUBLIC_KEY_CRYPTO)
+  #include <botan/ecc_key.h>
 #endif
 
 #if defined(BOTAN_HAS_ECDSA)
@@ -30,6 +39,10 @@
 
 #if defined(BOTAN_HAS_ECKCDSA)
   #include <botan/eckcdsa.h>
+#endif
+
+#if defined(BOTAN_HAS_ED25519)
+  #include <botan/ed25519.h>
 #endif
 
 #if defined(BOTAN_HAS_GOST_34_10_2001)
@@ -54,6 +67,11 @@
 
 #if defined(BOTAN_HAS_XMSS)
   #include <botan/xmss.h>
+#endif
+
+#if defined(BOTAN_HAS_SM2)
+  #include <botan/sm2.h>
+  #include <botan/sm2_enc.h>
 #endif
 
 #if defined(BOTAN_HAS_OPENSSL)
@@ -120,9 +138,21 @@ load_public_key(const AlgorithmIdentifier& alg_id,
       return std::unique_ptr<Public_Key>(new ECKCDSA_PublicKey(alg_id, key_bits));
 #endif
 
+#if defined(BOTAN_HAS_ED25519)
+   if(alg_name == "Ed25519")
+      return std::unique_ptr<Public_Key>(new Ed25519_PublicKey(alg_id, key_bits));
+#endif
+
 #if defined(BOTAN_HAS_GOST_34_10_2001)
    if(alg_name == "GOST-34.10")
       return std::unique_ptr<Public_Key>(new GOST_3410_PublicKey(alg_id, key_bits));
+#endif
+
+#if defined(BOTAN_HAS_SM2)
+   if(alg_name == "SM2_Sig")
+      return std::unique_ptr<Public_Key>(new SM2_Signature_PublicKey(alg_id, key_bits));
+   if(alg_name == "SM2_Enc")
+      return std::unique_ptr<Public_Key>(new SM2_Encryption_PublicKey(alg_id, key_bits));
 #endif
 
 #if defined(BOTAN_HAS_XMSS)
@@ -186,9 +216,21 @@ load_private_key(const AlgorithmIdentifier& alg_id,
       return std::unique_ptr<Private_Key>(new ECKCDSA_PrivateKey(alg_id, key_bits));
 #endif
 
+#if defined(BOTAN_HAS_ED25519)
+   if(alg_name == "Ed25519")
+      return std::unique_ptr<Private_Key>(new Ed25519_PrivateKey(alg_id, key_bits));
+#endif
+
 #if defined(BOTAN_HAS_GOST_34_10_2001)
    if(alg_name == "GOST-34.10")
       return std::unique_ptr<Private_Key>(new GOST_3410_PrivateKey(alg_id, key_bits));
+#endif
+
+#if defined(BOTAN_HAS_SM2)
+   if(alg_name == "SM2_Sig")
+      return std::unique_ptr<Private_Key>(new SM2_Signature_PrivateKey(alg_id, key_bits));
+   if(alg_name == "SM2_Enc")
+      return std::unique_ptr<Private_Key>(new SM2_Encryption_PrivateKey(alg_id, key_bits));
 #endif
 
 #if defined(BOTAN_HAS_ELGAMAL)
@@ -203,6 +245,22 @@ load_private_key(const AlgorithmIdentifier& alg_id,
 
    throw Decoding_Error("Unhandled PK algorithm " + alg_name);
    }
+
+namespace {
+
+std::string default_ec_group_for(const std::string& alg_name)
+   {
+   if(alg_name == "SM2_Enc" || alg_name == "SM2_Sig")
+      return "sm2p256v1";
+   if(alg_name == "GOST-34.10")
+      return "gost_256A";
+   if(alg_name == "ECGDSA")
+      return "brainpool256r1";
+   return "secp256r1";
+
+   }
+
+}
 
 std::unique_ptr<Private_Key>
 create_private_key(const std::string& alg_name,
@@ -227,7 +285,7 @@ create_private_key(const std::string& alg_name,
       if(provider.empty() || provider == "openssl")
          {
          std::unique_ptr<Botan::Private_Key> pk;
-         if(pk = make_openssl_rsa_private_key(rng, rsa_bits))
+         if((pk = make_openssl_rsa_private_key(rng, rsa_bits)))
             return pk;
 
          if(!provider.empty())
@@ -262,6 +320,13 @@ create_private_key(const std::string& alg_name,
       }
 #endif
 
+#if defined(BOTAN_HAS_ED25519)
+   if(alg_name == "Ed25519")
+      {
+      return std::unique_ptr<Private_Key>(new Ed25519_PrivateKey(rng));
+      }
+#endif
+
    // ECC crypto
 #if defined(BOTAN_HAS_ECC_PUBLIC_KEY_CRYPTO)
 
@@ -269,9 +334,11 @@ create_private_key(const std::string& alg_name,
       alg_name == "ECDH" ||
       alg_name == "ECKCDSA" ||
       alg_name == "ECGDSA" ||
+      alg_name == "SM2_Sig" ||
+      alg_name == "SM2_Enc" ||
       alg_name == "GOST-34.10")
       {
-      const EC_Group ec_group(params.empty() ? "secp256r1" : params);
+      const EC_Group ec_group(params.empty() ? default_ec_group_for(alg_name) : params);
 
 #if defined(BOTAN_HAS_ECDSA)
       if(alg_name == "ECDSA")
@@ -291,6 +358,13 @@ create_private_key(const std::string& alg_name,
 #if defined(BOTAN_HAS_GOST_34_10_2001)
       if(alg_name == "GOST-34.10")
          return std::unique_ptr<Private_Key>(new GOST_3410_PrivateKey(rng, ec_group));
+#endif
+
+#if defined(BOTAN_HAS_SM2)
+      if(alg_name == "SM2_Sig")
+         return std::unique_ptr<Private_Key>(new SM2_Signature_PrivateKey(rng, ec_group));
+      if(alg_name == "SM2_Enc")
+         return std::unique_ptr<Private_Key>(new SM2_Encryption_PrivateKey(rng, ec_group));
 #endif
 
 #if defined(BOTAN_HAS_ECGDSA)

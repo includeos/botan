@@ -5,11 +5,10 @@
  * Botan is released under the Simplified BSD License (see license.txt)
  **/
 
-#ifndef BOTAN_XMSS_SIGNATURE_H__
-#define BOTAN_XMSS_SIGNATURE_H__
+#ifndef BOTAN_XMSS_SIGNATURE_H_
+#define BOTAN_XMSS_SIGNATURE_H_
 
 #include <cstddef>
-#include <iterator>
 #include <botan/exceptn.h>
 #include <botan/types.h>
 #include <botan/secmem.h>

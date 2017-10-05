@@ -5,24 +5,15 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_TESTS_H__
-#define BOTAN_TESTS_H__
+#ifndef BOTAN_TESTS_H_
+#define BOTAN_TESTS_H_
 
 #include <botan/build.h>
 #include <botan/rng.h>
 #include <botan/hex.h>
 #include <botan/symkey.h>
 #include <botan/cpuid.h>
-
-#if defined(BOTAN_HAS_BIGINT)
-   #include <botan/bigint.h>
-#endif
-
-#if defined(BOTAN_HAS_EC_CURVE_GFP)
-   #include <botan/point_gfp.h>
-#endif
-
-#include <fstream>
+#include <iosfwd>
 #include <functional>
 #include <map>
 #include <memory>
@@ -32,24 +23,33 @@
 #include <unordered_map>
 #include <vector>
 
+namespace Botan {
+
+#if defined(BOTAN_HAS_BIGINT)
+class BigInt;
+#endif
+
+#if defined(BOTAN_HAS_EC_CURVE_GFP)
+class PointGFp;
+#endif
+
+}
+
 namespace Botan_Tests {
 
 #if defined(BOTAN_HAS_BIGINT)
    using Botan::BigInt;
 #endif
 
-using Botan::OctetString;
-
-class Test_Error : public Botan::Exception
+class Test_Error final : public Botan::Exception
    {
    public:
       explicit Test_Error(const std::string& what) : Exception("Test error", what) {}
    };
 
-class Provider_Filter
+class Provider_Filter final
    {
    public:
-      Provider_Filter() {}
       void set(const std::string& provider) { m_provider = provider; }
       std::vector<std::string> filter(const std::vector<std::string>&) const;
    private:
@@ -70,7 +70,7 @@ class Test
       /*
       * Some number of test results, all associated with who()
       */
-      class Result
+      class Result final
          {
          public:
             explicit Result(const std::string& who) : m_who(who) {}
@@ -203,8 +203,11 @@ class Test
             bool test_eq(const std::string& what, bool produced, bool expected);
 
             bool test_eq(const std::string& what, size_t produced, size_t expected);
+            bool test_eq_sz(const std::string& what, size_t produced, size_t expected);
 
-            bool test_eq(const std::string& what, OctetString produced, OctetString expected);
+            bool test_eq(const std::string& what,
+                         Botan::OctetString produced,
+                         Botan::OctetString expected);
 
             template<typename I1, typename I2>
             bool test_int_eq(I1 x, I2 y, const char* what)
@@ -344,7 +347,7 @@ class Test
             std::vector<std::string> m_log;
          };
 
-      class Registration
+      class Registration final
          {
          public:
             Registration(const std::string& name, Test* test);
@@ -496,7 +499,7 @@ class Text_Based_Test : public Test
       std::string m_output_key;
 
       bool m_first = true;
-      std::unique_ptr<std::ifstream> m_cur;
+      std::unique_ptr<std::istream> m_cur;
       std::string m_cur_src_name;
       std::deque<std::string> m_srcs;
       std::vector<Botan::CPUID::CPUID_bits> m_cpu_flags;

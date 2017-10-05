@@ -6,13 +6,11 @@
 */
 
 #include <botan/certstor_sql.h>
+#include <botan/pk_keys.h>
 #include <botan/ber_dec.h>
 #include <botan/der_enc.h>
-#include <botan/internal/filesystem.h>
 #include <botan/pkcs8.h>
 #include <botan/data_src.h>
-#include <botan/hash.h>
-#include <botan/hex.h>
 
 namespace Botan {
 

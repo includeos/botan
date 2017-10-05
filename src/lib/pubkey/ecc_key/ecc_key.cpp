@@ -8,7 +8,6 @@
 */
 
 #include <botan/ecc_key.h>
-#include <botan/x509_key.h>
 #include <botan/numthry.h>
 #include <botan/der_enc.h>
 #include <botan/ber_dec.h>
@@ -30,9 +29,12 @@ size_t EC_PublicKey::estimated_strength() const
 
 EC_PublicKey::EC_PublicKey(const EC_Group& dom_par,
                            const PointGFp& pub_point) :
-   m_domain_params(dom_par), m_public_key(pub_point),
-   m_domain_encoding(EC_DOMPAR_ENC_EXPLICIT)
+   m_domain_params(dom_par), m_public_key(pub_point)
    {
+   if (!dom_par.get_oid().empty())
+      m_domain_encoding = EC_DOMPAR_ENC_OID;
+   else
+      m_domain_encoding = EC_DOMPAR_ENC_EXPLICIT;
    if(domain().get_curve() != public_point().get_curve())
       throw Invalid_Argument("EC_PublicKey: curve mismatch in constructor");
    }
@@ -40,9 +42,13 @@ EC_PublicKey::EC_PublicKey(const EC_Group& dom_par,
 EC_PublicKey::EC_PublicKey(const AlgorithmIdentifier& alg_id,
                            const std::vector<uint8_t>& key_bits) :
    m_domain_params{EC_Group(alg_id.parameters)},
-   m_public_key{OS2ECP(key_bits, domain().get_curve())},
-   m_domain_encoding{EC_DOMPAR_ENC_EXPLICIT}
-   {}
+   m_public_key{OS2ECP(key_bits, domain().get_curve())}
+   {
+   if (!domain().get_oid().empty())
+      m_domain_encoding = EC_DOMPAR_ENC_OID;
+   else
+      m_domain_encoding = EC_DOMPAR_ENC_EXPLICIT;
+   }
 
 bool EC_PublicKey::check_key(RandomNumberGenerator& rng,
                              bool) const
@@ -120,7 +126,10 @@ EC_PrivateKey::EC_PrivateKey(RandomNumberGenerator& rng,
                              bool with_modular_inverse)
    {
    m_domain_params = ec_group;
-   m_domain_encoding = EC_DOMPAR_ENC_EXPLICIT;
+   if (!ec_group.get_oid().empty())
+      m_domain_encoding = EC_DOMPAR_ENC_OID;
+   else
+      m_domain_encoding = EC_DOMPAR_ENC_EXPLICIT;
 
    if(x == 0)
       {
@@ -166,9 +175,6 @@ EC_PrivateKey::EC_PrivateKey(const AlgorithmIdentifier& alg_id,
          .decode_optional(key_parameters, ASN1_Tag(0), PRIVATE)
          .decode_optional_string(public_key_bits, BIT_STRING, 1, PRIVATE)
       .end_cons();
-
-   if(!key_parameters.empty() && key_parameters != alg_id.oid)
-      throw Decoding_Error("EC_PrivateKey - inner and outer OIDs did not match");
 
    if(public_key_bits.empty())
       {

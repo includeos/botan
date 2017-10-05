@@ -13,6 +13,7 @@
    #include <botan/numthry.h>
    #include <botan/curve_gfp.h>
    #include <botan/curve_nistp.h>
+   #include <botan/pk_keys.h>
    #include <botan/point_gfp.h>
    #include <botan/ec_group.h>
    #include <botan/reducer.h>
@@ -53,7 +54,9 @@ const std::vector<std::string> ec_groups =
    "x962_p192v3",
    "x962_p239v1",
    "x962_p239v2",
-   "x962_p239v3"
+   "x962_p239v3",
+   "sm2p256v1",
+   "frp256v1"
    };
 
 Botan::BigInt test_integer(Botan::RandomNumberGenerator& rng, size_t bits, BigInt max)
@@ -133,7 +136,7 @@ Botan::PointGFp create_random_point(Botan::RandomNumberGenerator& rng,
       }
    }
 
-class ECC_Randomized_Tests : public Test
+class ECC_Randomized_Tests final : public Test
    {
    public:
       std::vector<Test::Result> run() override;
@@ -205,7 +208,7 @@ std::vector<Test::Result> ECC_Randomized_Tests::run()
 
 BOTAN_REGISTER_TEST("ecc_randomized", ECC_Randomized_Tests);
 
-class NIST_Curve_Reduction_Tests : public Test
+class NIST_Curve_Reduction_Tests final : public Test
    {
    public:
       typedef std::function<void (Botan::BigInt&, Botan::secure_vector<Botan::word>&)> reducer_fn;
@@ -214,12 +217,13 @@ class NIST_Curve_Reduction_Tests : public Test
          std::vector<Test::Result> results;
 
 #if defined(BOTAN_HAS_NIST_PRIME_REDUCERS_W32)
-         results.push_back(random_redc_test("P-192", Botan::prime_p192(), Botan::redc_p192));
-         results.push_back(random_redc_test("P-224", Botan::prime_p224(), Botan::redc_p224));
-         results.push_back(random_redc_test("P-256", Botan::prime_p256(), Botan::redc_p256));
          results.push_back(random_redc_test("P-384", Botan::prime_p384(), Botan::redc_p384));
+         results.push_back(random_redc_test("P-256", Botan::prime_p256(), Botan::redc_p256));
+         results.push_back(random_redc_test("P-224", Botan::prime_p224(), Botan::redc_p224));
+         results.push_back(random_redc_test("P-192", Botan::prime_p192(), Botan::redc_p192));
 #endif
          results.push_back(random_redc_test("P-521", Botan::prime_p521(), Botan::redc_p521));
+
          return results;
          }
 
@@ -275,11 +279,11 @@ Test::Result test_coordinates()
    const Botan::EC_Group secp160r1(Botan::OIDS::lookup("secp160r1"));
    const Botan::CurveGFp& curve = secp160r1.get_curve();
    const Botan::PointGFp& p_G = secp160r1.get_base_point();
-   const Botan::PointGFp p0 = p_G;
-   const Botan::PointGFp p1 = p_G * 2;
+
    const Botan::PointGFp point_exp(curve, exp_affine_x, exp_affine_y);
    result.confirm("Point is on the curve", point_exp.on_the_curve());
 
+   const Botan::PointGFp p1 = p_G * 2;
    result.test_eq("Point affine x", p1.get_affine_x(), exp_affine_x);
    result.test_eq("Point affine y", p1.get_affine_y(), exp_affine_y);
    return result;
@@ -820,7 +824,7 @@ Test::Result test_curve_cp_ctor()
    return result;
    }
 
-class ECC_Unit_Tests : public Test
+class ECC_Unit_Tests final : public Test
    {
    public:
       std::vector<Test::Result> run() override
@@ -857,7 +861,9 @@ class ECC_Unit_Tests : public Test
 
 BOTAN_REGISTER_TEST("ecc_unit", ECC_Unit_Tests);
 
-class ECC_Invalid_Key_Tests : public Text_Based_Test
+#if defined(BOTAN_HAS_ECDSA)
+
+class ECC_Invalid_Key_Tests final : public Text_Based_Test
    {
    public:
       ECC_Invalid_Key_Tests() :
@@ -884,6 +890,8 @@ class ECC_Invalid_Key_Tests : public Text_Based_Test
    };
 
 BOTAN_REGISTER_TEST("ecc_invalid", ECC_Invalid_Key_Tests);
+
+#endif
 
 #endif
 

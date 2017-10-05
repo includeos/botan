@@ -5,8 +5,8 @@
  * Botan is released under the Simplified BSD License (see license.txt)
  **/
 
-#ifndef BOTAN_XMSS_WOTS_VERIFICATION_OPERATION_H__
-#define BOTAN_XMSS_WOTS_VERIFICATION_OPERATION_H__
+#ifndef BOTAN_XMSS_WOTS_VERIFICATION_OPERATION_H_
+#define BOTAN_XMSS_WOTS_VERIFICATION_OPERATION_H_
 
 #include <cstddef>
 #include <iterator>
@@ -25,7 +25,7 @@ namespace Botan {
  * in the Botan algorithm registry.
  **/
 class XMSS_WOTS_Verification_Operation
-   : public virtual PK_Ops::Verification,
+   final : public virtual PK_Ops::Verification,
      public XMSS_WOTS_Common_Ops
    {
    public:
@@ -34,8 +34,7 @@ class XMSS_WOTS_Verification_Operation
 
       virtual ~XMSS_WOTS_Verification_Operation() = default;
 
-      virtual bool is_valid_signature(const uint8_t sig[],
-                                      size_t sig_len) override;
+      bool is_valid_signature(const uint8_t sig[], size_t sig_len) override;
 
       void update(const uint8_t msg[], size_t msg_len) override;
 

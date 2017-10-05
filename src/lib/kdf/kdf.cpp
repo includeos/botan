@@ -26,11 +26,7 @@
 #include <botan/kdf1_iso18033.h>
 #endif
 
-#if defined(BOTAN_HAS_TLS_V10_PRF)
-#include <botan/prf_tls.h>
-#endif
-
-#if defined(BOTAN_HAS_TLS_V12_PRF)
+#if defined(BOTAN_HAS_TLS_V10_PRF) || defined(BOTAN_HAS_TLS_V12_PRF)
 #include <botan/prf_tls.h>
 #endif
 
@@ -225,9 +221,9 @@ std::unique_ptr<KDF>
 KDF::create_or_throw(const std::string& algo,
                              const std::string& provider)
    {
-   if(auto bc = KDF::create(algo, provider))
+   if(auto kdf = KDF::create(algo, provider))
       {
-      return bc;
+      return kdf;
       }
    throw Lookup_Error("KDF", algo, provider);
    }

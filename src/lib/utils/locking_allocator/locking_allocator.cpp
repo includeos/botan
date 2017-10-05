@@ -22,14 +22,7 @@ bool ptr_in_pool(const void* pool_ptr, size_t poolsize,
    {
    const uintptr_t pool = reinterpret_cast<uintptr_t>(pool_ptr);
    const uintptr_t buf = reinterpret_cast<uintptr_t>(buf_ptr);
-
-   if(buf < pool || buf >= pool + poolsize)
-      return false;
-
-   BOTAN_ASSERT(buf + bufsize <= pool + poolsize,
-                "Pointer does not partially overlap pool");
-
-   return true;
+   return (buf >= pool) && (buf + bufsize <= pool + poolsize);
    }
 
 size_t padding_for_alignment(size_t offset, size_t desired_alignment)
@@ -71,7 +64,7 @@ void* mlock_allocator::allocate(size_t num_elems, size_t elem_size)
          m_freelist.erase(i);
          clear_mem(m_pool + offset, n);
 
-         BOTAN_ASSERT((reinterpret_cast<size_t>(m_pool) + offset) % alignment == 0,
+         BOTAN_ASSERT((reinterpret_cast<uintptr_t>(m_pool) + offset) % alignment == 0,
                       "Returning correctly aligned pointer");
 
          return m_pool + offset;
@@ -114,7 +107,7 @@ void* mlock_allocator::allocate(size_t num_elems, size_t elem_size)
 
       clear_mem(m_pool + offset + alignment_padding, n);
 
-      BOTAN_ASSERT((reinterpret_cast<size_t>(m_pool) + offset + alignment_padding) % alignment == 0,
+      BOTAN_ASSERT((reinterpret_cast<uintptr_t>(m_pool) + offset + alignment_padding) % alignment == 0,
                    "Returning correctly aligned pointer");
 
       return m_pool + offset + alignment_padding;
@@ -123,7 +116,7 @@ void* mlock_allocator::allocate(size_t num_elems, size_t elem_size)
    return nullptr;
    }
 
-bool mlock_allocator::deallocate(void* p, size_t num_elems, size_t elem_size)
+bool mlock_allocator::deallocate(void* p, size_t num_elems, size_t elem_size) BOTAN_NOEXCEPT
    {
    if(!m_pool)
       return false;
@@ -131,11 +124,11 @@ bool mlock_allocator::deallocate(void* p, size_t num_elems, size_t elem_size)
    size_t n = num_elems * elem_size;
 
    /*
-   We return nullptr in allocate if there was an overflow, so we
-   should never ever see an overflow in a deallocation.
+   We return nullptr in allocate if there was an overflow, so if an
+   overflow occurs here we know the pointer was not allocated by this pool.
    */
-   BOTAN_ASSERT(n / elem_size == num_elems,
-                "No overflow in deallocation");
+   if(n / elem_size != num_elems)
+      return false;
 
    if(!ptr_in_pool(m_pool, m_poolsize, p, n))
       return false;

@@ -9,8 +9,8 @@
 #if defined(BOTAN_HAS_NUMBERTHEORY)
    #include <botan/bigint.h>
    #include <botan/numthry.h>
-   #include <botan/reducer.h>
-   #include <cmath>
+   #include <botan/pow_mod.h>
+   #include <botan/parsing.h>
 #endif
 
 namespace Botan_Tests {
@@ -21,7 +21,7 @@ namespace {
 
 using Botan::BigInt;
 
-class BigInt_Unit_Tests : public Test
+class BigInt_Unit_Tests final : public Test
    {
    public:
       std::vector<Test::Result> run() override
@@ -255,7 +255,7 @@ class BigInt_Unit_Tests : public Test
 
 BOTAN_REGISTER_TEST("bigint_unit", BigInt_Unit_Tests);
 
-class BigInt_Add_Test : public Text_Based_Test
+class BigInt_Add_Test final : public Text_Based_Test
    {
    public:
       BigInt_Add_Test() : Text_Based_Test("bn/add.vec", "In1,In2,Output") {}
@@ -269,7 +269,6 @@ class BigInt_Add_Test : public Text_Based_Test
          const BigInt a = get_req_bn(vars, "In1");
          const BigInt b = get_req_bn(vars, "In2");
          const BigInt c = get_req_bn(vars, "Output");
-         BigInt d = a + b;
 
          result.test_eq("a + b", a + b, c);
          result.test_eq("b + a", b + a, c);
@@ -289,7 +288,7 @@ class BigInt_Add_Test : public Text_Based_Test
 
 BOTAN_REGISTER_TEST("bn_add", BigInt_Add_Test);
 
-class BigInt_Sub_Test : public Text_Based_Test
+class BigInt_Sub_Test final : public Text_Based_Test
    {
    public:
       BigInt_Sub_Test() : Text_Based_Test("bn/sub.vec", "In1,In2,Output") {}
@@ -301,8 +300,6 @@ class BigInt_Sub_Test : public Text_Based_Test
          const BigInt a = get_req_bn(vars, "In1");
          const BigInt b = get_req_bn(vars, "In2");
          const BigInt c = get_req_bn(vars, "Output");
-
-         BigInt d = a - b;
 
          result.test_eq("a - b", a - b, c);
 
@@ -316,7 +313,7 @@ class BigInt_Sub_Test : public Text_Based_Test
 
 BOTAN_REGISTER_TEST("bn_sub", BigInt_Sub_Test);
 
-class BigInt_Mul_Test : public Text_Based_Test
+class BigInt_Mul_Test final : public Text_Based_Test
    {
    public:
       BigInt_Mul_Test() : Text_Based_Test("bn/mul.vec", "In1,In2,Output") {}
@@ -346,7 +343,7 @@ class BigInt_Mul_Test : public Text_Based_Test
 
 BOTAN_REGISTER_TEST("bn_mul", BigInt_Mul_Test);
 
-class BigInt_Sqr_Test : public Text_Based_Test
+class BigInt_Sqr_Test final : public Text_Based_Test
    {
    public:
       BigInt_Sqr_Test() : Text_Based_Test("bn/sqr.vec", "Input,Output") {}
@@ -367,7 +364,7 @@ class BigInt_Sqr_Test : public Text_Based_Test
 
 BOTAN_REGISTER_TEST("bn_sqr", BigInt_Sqr_Test);
 
-class BigInt_Div_Test : public Text_Based_Test
+class BigInt_Div_Test final : public Text_Based_Test
    {
    public:
       BigInt_Div_Test() : Text_Based_Test("bn/divide.vec", "In1,In2,Output") {}
@@ -392,7 +389,7 @@ class BigInt_Div_Test : public Text_Based_Test
 
 BOTAN_REGISTER_TEST("bn_div", BigInt_Div_Test);
 
-class BigInt_Mod_Test : public Text_Based_Test
+class BigInt_Mod_Test final : public Text_Based_Test
    {
    public:
       BigInt_Mod_Test() : Text_Based_Test("bn/mod.vec", "In1,In2,Output") {}
@@ -426,7 +423,29 @@ class BigInt_Mod_Test : public Text_Based_Test
 
 BOTAN_REGISTER_TEST("bn_mod", BigInt_Mod_Test);
 
-class BigInt_Lshift_Test : public Text_Based_Test
+class BigInt_GCD_Test final : public Text_Based_Test
+   {
+   public:
+      BigInt_GCD_Test() : Text_Based_Test("bn/gcd.vec", "X,Y,GCD") {}
+
+      Test::Result run_one_test(const std::string&, const VarMap& vars) override
+         {
+         Test::Result result("BigInt Mod");
+
+         const BigInt x = get_req_bn(vars, "X");
+         const BigInt y = get_req_bn(vars, "Y");
+         const BigInt expected = get_req_bn(vars, "GCD");
+
+         const BigInt g = Botan::gcd(x, y);
+
+         result.test_eq("gcd", expected, g);
+         return result;
+         }
+   };
+
+BOTAN_REGISTER_TEST("bn_gcd", BigInt_GCD_Test);
+
+class BigInt_Lshift_Test final : public Text_Based_Test
    {
    public:
       BigInt_Lshift_Test() : Text_Based_Test("bn/lshift.vec", "Value,Shift,Output") {}
@@ -451,7 +470,7 @@ class BigInt_Lshift_Test : public Text_Based_Test
 
 BOTAN_REGISTER_TEST("bn_lshift", BigInt_Lshift_Test);
 
-class BigInt_Rshift_Test : public Text_Based_Test
+class BigInt_Rshift_Test final : public Text_Based_Test
    {
    public:
       BigInt_Rshift_Test() : Text_Based_Test("bn/rshift.vec", "Value,Shift,Output") {}
@@ -476,7 +495,7 @@ class BigInt_Rshift_Test : public Text_Based_Test
 
 BOTAN_REGISTER_TEST("bn_rshift", BigInt_Rshift_Test);
 
-class BigInt_Powmod_Test : public Text_Based_Test
+class BigInt_Powmod_Test final : public Text_Based_Test
    {
    public:
       BigInt_Powmod_Test() : Text_Based_Test("bn/powmod.vec", "Base,Exponent,Modulus,Output") {}
@@ -491,6 +510,12 @@ class BigInt_Powmod_Test : public Text_Based_Test
          const BigInt expected = get_req_bn(vars, "Output");
 
          result.test_eq("power_mod", Botan::power_mod(base, exponent, modulus), expected);
+
+         /*
+         * Only the basic power_mod interface supports negative base
+         */
+         if(base.is_negative())
+            return result;
 
          Botan::Power_Mod pow_mod1(modulus);
 
@@ -523,7 +548,7 @@ class BigInt_Powmod_Test : public Text_Based_Test
 
 BOTAN_REGISTER_TEST("bn_powmod", BigInt_Powmod_Test);
 
-class BigInt_IsPrime_Test : public Text_Based_Test
+class BigInt_IsPrime_Test final : public Text_Based_Test
    {
    public:
       BigInt_IsPrime_Test() : Text_Based_Test("bn/isprime.vec", "X") {}
@@ -546,7 +571,7 @@ class BigInt_IsPrime_Test : public Text_Based_Test
 
 BOTAN_REGISTER_TEST("bn_isprime", BigInt_IsPrime_Test);
 
-class BigInt_Ressol_Test : public Text_Based_Test
+class BigInt_Ressol_Test final : public Text_Based_Test
    {
    public:
       BigInt_Ressol_Test() : Text_Based_Test("bn/ressol.vec", "Input,Modulus,Output") {}
@@ -575,7 +600,7 @@ class BigInt_Ressol_Test : public Text_Based_Test
 
 BOTAN_REGISTER_TEST("bn_ressol", BigInt_Ressol_Test);
 
-class BigInt_InvMod_Test : public Text_Based_Test
+class BigInt_InvMod_Test final : public Text_Based_Test
    {
    public:
       BigInt_InvMod_Test() : Text_Based_Test("bn/invmod.vec", "Input,Modulus,Output") {}
@@ -617,7 +642,7 @@ class BigInt_InvMod_Test : public Text_Based_Test
 
 BOTAN_REGISTER_TEST("bn_invmod", BigInt_InvMod_Test);
 
-class DSA_ParamGen_Test : public Text_Based_Test
+class DSA_ParamGen_Test final : public Text_Based_Test
    {
    public:
       DSA_ParamGen_Test() : Text_Based_Test("bn/dsa_gen.vec", "P,Q,Counter,Seed") {}

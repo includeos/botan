@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_KDF_BASE_H__
-#define BOTAN_KDF_BASE_H__
+#ifndef BOTAN_KDF_BASE_H_
+#define BOTAN_KDF_BASE_H_
 
 #include <botan/secmem.h>
 #include <botan/types.h>
@@ -17,7 +17,7 @@ namespace Botan {
 /**
 * Key Derivation Function
 */
-class BOTAN_DLL KDF
+class BOTAN_PUBLIC_API(2,0) KDF
    {
    public:
       virtual ~KDF() = default;
@@ -107,9 +107,9 @@ class BOTAN_DLL KDF
                                     const std::string& label = "") const
          {
          return derive_key(key_len, secret.data(), secret.size(),
-                           reinterpret_cast<const uint8_t*>(salt.data()),
+                           cast_char_ptr_to_uint8(salt.data()),
                            salt.length(),
-                           reinterpret_cast<const uint8_t*>(label.data()),
+                           cast_char_ptr_to_uint8(label.data()),
                            label.length());
 
          }
@@ -152,7 +152,7 @@ class BOTAN_DLL KDF
          return derive_key(key_len,
                            secret.data(), secret.size(),
                            salt, salt_len,
-                           reinterpret_cast<const uint8_t*>(label.data()),
+                           cast_char_ptr_to_uint8(label.data()),
                            label.size());
          }
 
@@ -172,9 +172,9 @@ class BOTAN_DLL KDF
                                     const std::string& label = "") const
          {
          return derive_key(key_len, secret, secret_len,
-                           reinterpret_cast<const uint8_t*>(salt.data()),
+                           cast_char_ptr_to_uint8(salt.data()),
                            salt.length(),
-                           reinterpret_cast<const uint8_t*>(label.data()),
+                           cast_char_ptr_to_uint8(label.data()),
                            label.length());
          }
 
@@ -189,7 +189,7 @@ class BOTAN_DLL KDF
 * @param algo_spec the name of the KDF to create
 * @return pointer to newly allocated object of that type
 */
-BOTAN_DLL KDF* get_kdf(const std::string& algo_spec);
+BOTAN_PUBLIC_API(2,0) KDF* get_kdf(const std::string& algo_spec);
 
 }
 

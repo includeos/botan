@@ -5,18 +5,18 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_DL_ALGO_H__
-#define BOTAN_DL_ALGO_H__
+#ifndef BOTAN_DL_ALGO_H_
+#define BOTAN_DL_ALGO_H_
 
 #include <botan/dl_group.h>
-#include <botan/x509_key.h>
+#include <botan/pk_keys.h>
 
 namespace Botan {
 
 /**
 * This class represents discrete logarithm (DL) public keys.
 */
-class BOTAN_DLL DL_Scheme_PublicKey : public virtual Public_Key
+class BOTAN_PUBLIC_API(2,0) DL_Scheme_PublicKey : public virtual Public_Key
    {
    public:
       bool check_key(RandomNumberGenerator& rng, bool) const override;
@@ -92,7 +92,7 @@ class BOTAN_DLL DL_Scheme_PublicKey : public virtual Public_Key
 /**
 * This class represents discrete logarithm (DL) private keys.
 */
-class BOTAN_DLL DL_Scheme_PrivateKey : public virtual DL_Scheme_PublicKey,
+class BOTAN_PUBLIC_API(2,0) DL_Scheme_PrivateKey : public virtual DL_Scheme_PublicKey,
                                        public virtual Private_Key
    {
    public:

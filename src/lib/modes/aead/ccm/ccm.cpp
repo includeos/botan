@@ -7,7 +7,7 @@
 */
 
 #include <botan/ccm.h>
-#include <botan/parsing.h>
+#include <botan/loadstor.h>
 
 namespace Botan {
 
@@ -136,7 +136,8 @@ secure_vector<uint8_t> CCM_Mode::format_b0(size_t sz)
    {
    secure_vector<uint8_t> B0(CCM_BS);
 
-   const uint8_t b_flags = (m_ad_buf.size() ? 64 : 0) + (((tag_size()/2)-1) << 3) + (L()-1);
+   const uint8_t b_flags =
+      static_cast<uint8_t>((m_ad_buf.size() ? 64 : 0) + (((tag_size()/2)-1) << 3) + (L()-1));
 
    B0[0] = b_flags;
    copy_mem(&B0[1], m_nonce.data(), m_nonce.size());
@@ -149,7 +150,7 @@ secure_vector<uint8_t> CCM_Mode::format_c0()
    {
    secure_vector<uint8_t> C(CCM_BS);
 
-   const uint8_t a_flags = L()-1;
+   const uint8_t a_flags = static_cast<uint8_t>(L() - 1);
 
    C[0] = a_flags;
    copy_mem(&C[1], m_nonce.data(), m_nonce.size());
@@ -259,7 +260,7 @@ void CCM_Decryption::finish(secure_vector<uint8_t>& buffer, size_t offset)
 
    T ^= S0;
 
-   if(!same_mem(T.data(), buf_end, tag_size()))
+   if(!constant_time_compare(T.data(), buf_end, tag_size()))
       throw Integrity_Failure("CCM tag check failed");
 
    buffer.resize(buffer.size() - tag_size());

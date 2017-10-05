@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_OCSP_TYPES_H__
-#define BOTAN_OCSP_TYPES_H__
+#ifndef BOTAN_OCSP_TYPES_H_
+#define BOTAN_OCSP_TYPES_H_
 
 #include <botan/x509cert.h>
 #include <botan/asn1_time.h>
@@ -16,7 +16,7 @@ namespace Botan {
 
 namespace OCSP {
 
-class BOTAN_DLL CertID final : public ASN1_Object
+class BOTAN_PUBLIC_API(2,0) CertID final : public ASN1_Object
    {
    public:
       CertID() = default;
@@ -40,7 +40,7 @@ class BOTAN_DLL CertID final : public ASN1_Object
       BigInt m_subject_serial;
    };
 
-class BOTAN_DLL SingleResponse final : public ASN1_Object
+class BOTAN_PUBLIC_API(2,0) SingleResponse final : public ASN1_Object
    {
    public:
       const CertID& certid() const { return m_certid; }

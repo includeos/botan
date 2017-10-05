@@ -11,7 +11,6 @@
    #include "test_pubkey.h"
    #include <botan/dlies.h>
    #include <botan/dh.h>
-   #include <botan/pubkey.h>
 #endif
 
 namespace Botan_Tests {
@@ -20,7 +19,7 @@ namespace {
 
 #if defined(BOTAN_HAS_DLIES) && defined(BOTAN_HAS_DIFFIE_HELLMAN)
 
-class DLIES_KAT_Tests : public Text_Based_Test
+class DLIES_KAT_Tests final : public Text_Based_Test
    {
    public:
       DLIES_KAT_Tests()
@@ -67,6 +66,12 @@ class DLIES_KAT_Tests : public Text_Based_Test
             {
             enc.reset(Botan::get_cipher_mode(cipher_algo, Botan::ENCRYPTION));
             dec.reset(Botan::get_cipher_mode(cipher_algo, Botan::DECRYPTION));
+
+            if(!enc || !dec)
+               {
+               result.test_note("Skipping due to missing cipher:  " + mac_algo);
+               return result;
+               }
 
             cipher_key_len = enc->key_spec().maximum_keylength();
             }
@@ -165,7 +170,7 @@ Test::Result test_xor()
    return result;
    }
 
-class DLIES_Unit_Tests : public Test
+class DLIES_Unit_Tests final : public Test
    {
    public:
       std::vector<Test::Result> run() override

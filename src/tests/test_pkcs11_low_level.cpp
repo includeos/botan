@@ -13,7 +13,6 @@
 #include <functional>
 #include <memory>
 #include <array>
-#include <type_traits>
 #include <map>
 
 #if defined(BOTAN_HAS_PKCS11)
@@ -789,7 +788,7 @@ Test::Result test_c_copy_object()
    return result;
    }
 
-class LowLevelTests : public Test
+class LowLevelTests final : public Test
    {
    public:
       std::vector<Test::Result> run() override

@@ -6,17 +6,15 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_P11_ECC_H__
-#define BOTAN_P11_ECC_H__
+#ifndef BOTAN_P11_ECC_H_
+#define BOTAN_P11_ECC_H_
 
-#include <botan/build.h>
 #include <botan/p11_object.h>
 
 #if defined(BOTAN_HAS_ECC_PUBLIC_KEY_CRYPTO)
 #include <botan/pk_keys.h>
 #include <botan/ecc_key.h>
 #include <botan/ec_group.h>
-#include <botan/rng.h>
 #include <botan/alg_id.h>
 #include <vector>
 
@@ -26,7 +24,7 @@ namespace PKCS11 {
 class Session;
 
 /// Properties for generating a PKCS#11 EC public key
-class BOTAN_DLL EC_PublicKeyGenerationProperties final : public PublicKeyProperties
+class BOTAN_PUBLIC_API(2,0) EC_PublicKeyGenerationProperties final : public PublicKeyProperties
    {
    public:
       /// @param ec_params DER-encoding of an ANSI X9.62 Parameters value
@@ -43,7 +41,7 @@ class BOTAN_DLL EC_PublicKeyGenerationProperties final : public PublicKeyPropert
    };
 
 /// Properties for importing a PKCS#11 EC public key
-class BOTAN_DLL EC_PublicKeyImportProperties final : public PublicKeyProperties
+class BOTAN_PUBLIC_API(2,0) EC_PublicKeyImportProperties final : public PublicKeyProperties
    {
    public:
       /**
@@ -70,7 +68,7 @@ class BOTAN_DLL EC_PublicKeyImportProperties final : public PublicKeyProperties
    };
 
 /// Represents a PKCS#11 EC public key
-class BOTAN_DLL PKCS11_EC_PublicKey : public virtual EC_PublicKey,
+class BOTAN_PUBLIC_API(2,0) PKCS11_EC_PublicKey : public virtual EC_PublicKey,
    public Object
    {
    public:
@@ -92,7 +90,7 @@ class BOTAN_DLL PKCS11_EC_PublicKey : public virtual EC_PublicKey,
    };
 
 /// Properties for generating a PKCS#11 EC private key
-class BOTAN_DLL EC_PrivateKeyGenerationProperties final : public PrivateKeyProperties
+class BOTAN_PUBLIC_API(2,0) EC_PrivateKeyGenerationProperties final : public PrivateKeyProperties
    {
    public:
       EC_PrivateKeyGenerationProperties()
@@ -101,7 +99,7 @@ class BOTAN_DLL EC_PrivateKeyGenerationProperties final : public PrivateKeyPrope
    };
 
 /// Properties for importing a PKCS#11 EC private key
-class BOTAN_DLL EC_PrivateKeyImportProperties final : public PrivateKeyProperties
+class BOTAN_PUBLIC_API(2,0) EC_PrivateKeyImportProperties final : public PrivateKeyProperties
    {
    public:
       /**
@@ -130,7 +128,7 @@ class BOTAN_DLL EC_PrivateKeyImportProperties final : public PrivateKeyPropertie
 // note: don't inherit from PKCS11_EC_PublicKey: a private key object IS NOT A public key object on a smartcard (-> two different objects)
 // note: don't inherit from EC_PublicKey: the public key can not be extracted from a PKCS11-EC-PrivateKey (its only attributes are CKA_EC_PARAMS and CKA_VALUE)
 /// Represents a PKCS#11 EC private key
-class BOTAN_DLL PKCS11_EC_PrivateKey : public virtual Private_Key,
+class BOTAN_PUBLIC_API(2,0) PKCS11_EC_PrivateKey : public virtual Private_Key,
    public Object
    {
    public:

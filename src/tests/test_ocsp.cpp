@@ -11,13 +11,14 @@
    #include <botan/x509path.h>
    #include <botan/certstor.h>
    #include <botan/calendar.h>
+   #include <fstream>
 #endif
 
 namespace Botan_Tests {
 
-#if defined(BOTAN_HAS_OCSP)
+#if defined(BOTAN_HAS_OCSP) && defined(BOTAN_HAS_RSA)
 
-class OCSP_Tests : public Test
+class OCSP_Tests final : public Test
    {
    private:
       std::vector<uint8_t> slurp_data_file(const std::string& path)
@@ -81,6 +82,36 @@ class OCSP_Tests : public Test
                {
                result.test_failure("Parsing failed", e.what());
                }
+            }
+
+         return result;
+         }
+
+      Test::Result test_response_certificate_access()
+         {
+         Test::Result result("OCSP response certificate access");
+
+         try
+            {
+            Botan::OCSP::Response resp1(slurp_data_file("ocsp/resp1.der"));
+            const auto &certs1 = resp1.certificates();
+            if(result.test_eq("Expected count of certificates", certs1.size(), 1))
+               {
+               const auto cert = certs1.front();
+               const Botan::X509_DN expected_dn({std::make_pair(
+                  "X520.CommonName",
+                  "Symantec Class 3 EV SSL CA - G3 OCSP Responder")});
+               const bool matches = cert.subject_dn() == expected_dn;
+               result.test_eq("CN matches expected", matches, true);
+               }
+
+            Botan::OCSP::Response resp2(slurp_data_file("ocsp/resp2.der"));
+            const auto &certs2 = resp2.certificates();
+            result.test_eq("Expect no certificates", certs2.size(), 0);
+            }
+         catch(Botan::Exception& e)
+            {
+            result.test_failure("Parsing failed", e.what());
             }
 
          return result;
@@ -192,6 +223,7 @@ class OCSP_Tests : public Test
 
          results.push_back(test_request_encoding());
          results.push_back(test_response_parsing());
+         results.push_back(test_response_certificate_access());
          results.push_back(test_response_verification());
 
 #if defined(BOTAN_HAS_ONLINE_REVOCATION_CHECKS)

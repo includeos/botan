@@ -6,21 +6,20 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_P11_SLOT_H__
-#define BOTAN_P11_SLOT_H__
+#ifndef BOTAN_P11_SLOT_H_
+#define BOTAN_P11_SLOT_H_
 
 #include <string>
 #include <vector>
 #include <functional>
 
-#include <botan/p11.h>
 #include <botan/p11_module.h>
 
 namespace Botan {
 namespace PKCS11 {
 
 /// Represents a PKCS#11 Slot, i.e., a card reader
-class BOTAN_DLL Slot final
+class BOTAN_PUBLIC_API(2,0) Slot final
    {
    public:
       /**

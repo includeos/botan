@@ -11,12 +11,9 @@
 #include <string>
 #include <set>
 #include <deque>
-#include <thread>
-#include <future>
 
 #include <botan/version.h>
 #include <botan/loadstor.h>
-#include <botan/hash.h>
 
 #if defined(BOTAN_HAS_HMAC_DRBG)
    #include <botan/hmac_drbg.h>
@@ -34,14 +31,112 @@
    #include <botan/internal/openssl.h>
 #endif
 
+#if defined(BOTAN_TARGET_OS_HAS_THREADS)
+   #include <thread>
+   #include <future>
+#endif
+
 namespace {
 
-class Test_Runner : public Botan_CLI::Command
+class Test_Runner final : public Botan_CLI::Command
    {
    public:
       Test_Runner()
          : Command("test --threads=0 --run-long-tests --run-online-tests --test-runs=1 --drbg-seed= --data-dir="
                    " --pkcs11-lib= --provider= --log-success *suites") {}
+
+      std::unique_ptr<Botan::RandomNumberGenerator>
+      create_test_rng(const std::string& drbg_seed)
+         {
+         std::unique_ptr<Botan::RandomNumberGenerator> rng;
+
+#if defined(BOTAN_HAS_HMAC_DRBG) && defined(BOTAN_AUTO_RNG_HMAC)
+
+         std::vector<uint8_t> seed = Botan::hex_decode(drbg_seed);
+         if(seed.empty())
+            {
+            const uint64_t ts = Botan_Tests::Test::timestamp();
+            seed.resize(8);
+            Botan::store_be(ts, seed.data());
+            }
+
+         output() << " rng:HMAC_DRBG(" << BOTAN_AUTO_RNG_HMAC << ") with seed '" << Botan::hex_encode(seed) << "'\n";
+
+         // Expand out the seed with a hash to make the DRBG happy
+         std::unique_ptr<Botan::MessageAuthenticationCode> mac =
+            Botan::MessageAuthenticationCode::create(BOTAN_AUTO_RNG_HMAC);
+
+         mac->set_key(seed);
+         seed.resize(mac->output_length());
+         mac->final(seed.data());
+
+         std::unique_ptr<Botan::HMAC_DRBG> drbg(new Botan::HMAC_DRBG(std::move(mac)));
+         drbg->initialize_with(seed.data(), seed.size());
+
+#if defined(BOTAN_TARGET_OS_HAS_THREADS)
+         rng.reset(new Botan::Serialized_RNG(drbg.release()));
+#else
+         rng = std::move(drbg);
+#endif
+
+#endif
+
+         if(!rng && drbg_seed != "")
+            throw Botan_Tests::Test_Error("HMAC_DRBG disabled in build, cannot specify DRBG seed");
+
+#if defined(BOTAN_HAS_SYSTEM_RNG)
+         if(!rng)
+            {
+            output() << " rng:system\n";
+            rng.reset(new Botan::System_RNG);
+            }
+#endif
+
+#if defined(BOTAN_HAS_AUTO_SEEDING_RNG)
+         if(!rng)
+            {
+            output() << " rng:autoseeded\n";
+#if defined(BOTAN_TARGET_OS_HAS_THREADS)
+            rng.reset(new Botan::Serialized_RNG(new Botan::AutoSeeded_RNG));
+#else
+            rng.reset(new Botan::AutoSeeded_RNG);
+#endif
+
+            }
+#endif
+
+         if(!rng)
+            {
+            // last ditch fallback for RNG-less build
+            class Bogus_Fallback_RNG final : public Botan::RandomNumberGenerator
+               {
+               public:
+                  std::string name() const override { return "Bogus_Fallback_RNG"; }
+
+                  void clear() override { /* ignored */ }
+                  void add_entropy(const uint8_t[], size_t) override { /* ignored */ }
+                  bool is_seeded() const override { return true; }
+
+                  void randomize(uint8_t out[], size_t len) override
+                     {
+                     for(size_t i = 0; i != len; ++i)
+                        {
+                        m_x = (m_x * 31337 + 42);
+                        out[i] = static_cast<uint8_t>(m_x >> 7);
+                        }
+                     }
+
+                  Bogus_Fallback_RNG() : m_x(1) {}
+               private:
+                  uint32_t m_x;
+               };
+
+            output() << " rng:bogus\n";
+            rng.reset(new Bogus_Fallback_RNG);
+            }
+
+         return rng;
+         }
 
       std::string help_text() const override
          {
@@ -170,46 +265,7 @@ class Test_Runner : public Botan_CLI::Command
             }
 #endif
 
-         std::unique_ptr<Botan::RandomNumberGenerator> rng;
-
-#if defined(BOTAN_HAS_HMAC_DRBG) && defined(BOTAN_HAS_SHA2_64)
-         std::vector<uint8_t> seed = Botan::hex_decode(drbg_seed);
-         if(seed.empty())
-            {
-            const uint64_t ts = Botan_Tests::Test::timestamp();
-            seed.resize(8);
-            Botan::store_be(ts, seed.data());
-            }
-
-         output() << " rng:HMAC_DRBG with seed '" << Botan::hex_encode(seed) << "'";
-
-         // Expand out the seed to 512 bits to make the DRBG happy
-         std::unique_ptr<Botan::HashFunction> sha512(Botan::HashFunction::create("SHA-512"));
-         sha512->update(seed);
-         seed.resize(sha512->output_length());
-         sha512->final(seed.data());
-
-         std::unique_ptr<Botan::HMAC_DRBG> drbg(new Botan::HMAC_DRBG("SHA-384"));
-         drbg->initialize_with(seed.data(), seed.size());
-         rng.reset(new Botan::Serialized_RNG(drbg.release()));
-
-#else
-
-         if(drbg_seed != "")
-            {
-            throw Botan_Tests::Test_Error("HMAC_DRBG disabled in build, cannot specify DRBG seed");
-            }
-
-#if defined(BOTAN_HAS_SYSTEM_RNG)
-         output() << " rng:system";
-         rng.reset(new Botan::System_RNG);
-#elif defined(BOTAN_HAS_AUTO_SEEDING_RNG)
-         output() << " rng:autoseeded";
-         rng.reset(new Botan::Serialized_RNG(new Botan::AutoSeeded_RNG));
-#endif
-
-#endif
-         output() << "\n";
+         std::unique_ptr<Botan::RandomNumberGenerator> rng = create_test_rng(drbg_seed);
 
          Botan_Tests::Test::setup_tests(log_success, run_online_tests, run_long_tests,
                                         data_dir, pkcs11_lib, pf, rng.get());
@@ -286,6 +342,7 @@ class Test_Runner : public Botan_CLI::Command
          else
             {
 
+#if defined(BOTAN_TARGET_OS_HAS_THREADS)
             /*
             We're not doing this in a particularly nice way, and variance in time is
             high so commonly we'll 'run dry' by blocking on the first future. But
@@ -328,6 +385,10 @@ class Test_Runner : public Botan_CLI::Command
                out << report_out(fut_results[0].get(), tests_failed, tests_ran) << std::flush;
                fut_results.pop_front();
                }
+#else
+            out << "Threading support disabled\n";
+            return 1;
+#endif
             }
 
          const uint64_t total_ns = Botan_Tests::Test::timestamp() - start_time;
@@ -365,7 +426,7 @@ int main(int argc, char* argv[])
 
       if(!cmd)
          {
-         std::cout << "Unable to retrieve testing helper (program bug)\n"; // WTF
+         std::cerr << "Unable to retrieve testing helper (program bug)\n"; // WTF
          return 1;
          }
 
@@ -374,14 +435,14 @@ int main(int argc, char* argv[])
       }
    catch(Botan::Exception& e)
       {
-      std::cout << "Exiting with library exception " << e.what() << std::endl;
+      std::cerr << "Exiting with library exception " << e.what() << std::endl;
       }
    catch(std::exception& e)
       {
-      std::cout << "Exiting with std exception " << e.what() << std::endl;
+      std::cerr << "Exiting with std exception " << e.what() << std::endl;
       }
    catch(...)
       {
-      std::cout << "Exiting with unknown exception\n";
+      std::cerr << "Exiting with unknown exception" << std::endl;
       }
    }

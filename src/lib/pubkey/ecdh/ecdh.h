@@ -7,8 +7,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_ECDH_KEY_H__
-#define BOTAN_ECDH_KEY_H__
+#ifndef BOTAN_ECDH_KEY_H_
+#define BOTAN_ECDH_KEY_H_
 
 #include <botan/ecc_key.h>
 
@@ -17,7 +17,7 @@ namespace Botan {
 /**
 * This class represents ECDH Public Keys.
 */
-class BOTAN_DLL ECDH_PublicKey : public virtual EC_PublicKey
+class BOTAN_PUBLIC_API(2,0) ECDH_PublicKey : public virtual EC_PublicKey
    {
    public:
       /**
@@ -54,7 +54,7 @@ class BOTAN_DLL ECDH_PublicKey : public virtual EC_PublicKey
       * @return public point value
       */
       std::vector<uint8_t> public_value(PointGFp::Compression_Type type) const
-         { return unlock(EC2OSP(public_point(), type)); }
+         { return unlock(EC2OSP(public_point(), static_cast<uint8_t>(type))); }
 
    protected:
       ECDH_PublicKey() = default;
@@ -63,7 +63,7 @@ class BOTAN_DLL ECDH_PublicKey : public virtual EC_PublicKey
 /**
 * This class represents ECDH Private Keys.
 */
-class BOTAN_DLL ECDH_PrivateKey : public ECDH_PublicKey,
+class BOTAN_PUBLIC_API(2,0) ECDH_PrivateKey final : public ECDH_PublicKey,
                                   public EC_PrivateKey,
                                   public PK_Key_Agreement_Key
    {

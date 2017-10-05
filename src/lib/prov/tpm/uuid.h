@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_UUID_H__
-#define BOTAN_UUID_H__
+#ifndef BOTAN_UUID_H_
+#define BOTAN_UUID_H_
 
 #include <botan/secmem.h>
 #include <botan/hex.h>
@@ -15,7 +15,7 @@
 namespace Botan {
 
 // TODO: move to util?
-class UUID
+class UUID final
    {
    public:
       // Represents an unassigned UUID object
@@ -86,14 +86,14 @@ class UUID
          return h;
          }
 
-      const std::vector<uint8_t> binary_value() const { return m_uuid; }
+      const std::vector<uint8_t>& binary_value() const { return m_uuid; }
 
-      bool operator==(const UUID& other)
+      bool operator==(const UUID& other) const
          {
          return m_uuid == other.m_uuid;
          }
 
-      bool operator!=(const UUID& other) { return !(*this == other); }
+      bool operator!=(const UUID& other) const { return !(*this == other); }
 
       bool is_valid() const { return m_uuid.size() == 16; }
 

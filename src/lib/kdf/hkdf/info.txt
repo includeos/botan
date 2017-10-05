@@ -1,3 +1,7 @@
 <defines>
-HKDF -> 20131128
+HKDF -> 20170927
 </defines>
+
+<requires>
+hmac
+</requires>

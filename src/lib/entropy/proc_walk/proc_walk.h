@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_ENTROPY_SRC_PROC_WALK_H__
-#define BOTAN_ENTROPY_SRC_PROC_WALK_H__
+#ifndef BOTAN_ENTROPY_SRC_PROC_WALK_H_
+#define BOTAN_ENTROPY_SRC_PROC_WALK_H_
 
 #include <botan/entropy_src.h>
 #include <botan/mutex.h>
@@ -30,7 +30,7 @@ class ProcWalking_EntropySource final : public Entropy_Source
 
       size_t poll(RandomNumberGenerator& rng) override;
 
-      ProcWalking_EntropySource(const std::string& root_dir) :
+      explicit ProcWalking_EntropySource(const std::string& root_dir) :
          m_path(root_dir), m_dir(nullptr) {}
 
    private:

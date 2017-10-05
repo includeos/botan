@@ -4,20 +4,12 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_CLI_H__
-#define BOTAN_CLI_H__
+#ifndef BOTAN_CLI_H_
+#define BOTAN_CLI_H_
 
 #include <botan/build.h>
 #include <botan/parsing.h>
 #include <botan/rng.h>
-
-#if defined(BOTAN_HAS_AUTO_SEEDING_RNG)
-   #include <botan/auto_rng.h>
-#endif
-
-#if defined(BOTAN_HAS_SYSTEM_RNG)
-   #include <botan/system_rng.h>
-#endif
 
 #include <fstream>
 #include <iostream>
@@ -29,6 +21,10 @@
 #include <vector>
 
 namespace Botan_CLI {
+
+/* Declared in utils.cpp */
+std::unique_ptr<Botan::RandomNumberGenerator>
+cli_make_rng(const std::string& type, const std::string& hex_drbg_seed);
 
 class CLI_Error : public std::runtime_error
    {
@@ -60,7 +56,7 @@ class CLI_Error_Unsupported : public CLI_Error
          : CLI_Error(what + " with '" + who + "' unsupported or not available") {}
    };
 
-struct CLI_Error_Invalid_Spec : public CLI_Error
+class CLI_Error_Invalid_Spec : public CLI_Error
    {
    public:
       explicit CLI_Error_Invalid_Spec(const std::string& spec)
@@ -216,12 +212,12 @@ class Command
 
             if(m_user_args.count("output"))
                {
-               m_output_stream.reset(new std::ofstream(get_arg("output")));
+               m_output_stream.reset(new std::ofstream(get_arg("output"), std::ios::binary));
                }
 
-            if(m_user_args.count("error_output"))
+            if(m_user_args.count("error-output"))
                {
-               m_error_output_stream.reset(new std::ofstream(get_arg("error_output")));
+               m_error_output_stream.reset(new std::ofstream(get_arg("error-output"), std::ios::binary));
                }
 
             // Now insert any defaults for options not supplied by the user
@@ -256,7 +252,8 @@ class Command
 
       virtual std::string help_text() const
          {
-         return "Usage: " + m_spec;
+         return "Usage: " + m_spec +
+            "\n\nAll commands support --verbose --help --output= --error-output= --rng-type= --drbg-seed=";
          }
 
       const std::string& cmd_spec() const
@@ -332,13 +329,8 @@ class Command
          m_spec_flags.insert("help");
          m_spec_opts.insert(std::make_pair("output", ""));
          m_spec_opts.insert(std::make_pair("error-output", ""));
-
-#if defined(BOTAN_HAS_SYSTEM_RNG)
-         const auto availableRng = "system";
-#else
-         const auto availableRng = "auto";
-#endif
-         m_spec_opts.insert(std::make_pair("rng-type", availableRng));
+         m_spec_opts.insert(std::make_pair("rng-type", ""));
+         m_spec_opts.insert(std::make_pair("drbg-seed", ""));
          }
 
       /*
@@ -425,25 +417,42 @@ class Command
       /*
       * Read an entire file into memory and return the contents
       */
-      std::vector<uint8_t> slurp_file(const std::string& input_file) const
+      std::vector<uint8_t> slurp_file(const std::string& input_file,
+                                      size_t buf_size = 0) const
          {
          std::vector<uint8_t> buf;
          auto insert_fn = [&](const uint8_t b[], size_t l)
             {
             buf.insert(buf.end(), b, b + l);
             };
-         this->read_file(input_file, insert_fn);
+         this->read_file(input_file, insert_fn, buf_size);
          return buf;
          }
 
-      std::string slurp_file_as_str(const std::string& input_file)
+      /*
+      * Read an entire file into memory and return the contents
+      */
+      Botan::secure_vector<uint8_t> slurp_file_locked(const std::string& input_file,
+                                                      size_t buf_size = 0) const
+         {
+         Botan::secure_vector<uint8_t> buf;
+         auto insert_fn = [&](const uint8_t b[], size_t l)
+            {
+            buf.insert(buf.end(), b, b + l);
+            };
+         this->read_file(input_file, insert_fn, buf_size);
+         return buf;
+         }
+
+      std::string slurp_file_as_str(const std::string& input_file,
+                                    size_t buf_size = 0) const
          {
          std::string str;
          auto insert_fn = [&](const uint8_t b[], size_t l)
             {
             str.append(reinterpret_cast<const char*>(b), l);
             };
-         this->read_file(input_file, insert_fn);
+         this->read_file(input_file, insert_fn, buf_size);
          return str;
          }
 
@@ -479,7 +488,8 @@ class Command
          while(in.good())
             {
             in.read(reinterpret_cast<char*>(buf.data()), buf.size());
-            consumer_fn(buf.data(), static_cast<size_t>(in.gcount()));
+            const size_t got = static_cast<size_t>(in.gcount());
+            consumer_fn(buf.data(), got);
             }
          }
 
@@ -493,29 +503,7 @@ class Command
          {
          if(m_rng == nullptr)
             {
-            const std::string rng_type = get_arg("rng-type");
-
-            if(rng_type == "system")
-               {
-#if defined(BOTAN_HAS_SYSTEM_RNG)
-               m_rng.reset(new Botan::System_RNG);
-#endif
-               }
-
-            // TODO --rng-type=drbg
-            // TODO --drbg-seed=hexstr
-
-            if(rng_type == "auto")
-               {
-#if defined(BOTAN_HAS_AUTO_SEEDING_RNG)
-               m_rng.reset(new Botan::AutoSeeded_RNG);
-#endif
-               }
-
-            if(!m_rng)
-               {
-               throw CLI_Error_Unsupported("rng", rng_type);
-               }
+            m_rng = cli_make_rng(get_arg("rng-type"), get_arg("drbg-seed"));
             }
 
          return *m_rng.get();

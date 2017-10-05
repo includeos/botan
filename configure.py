@@ -37,13 +37,6 @@ import time
 import errno
 import optparse # pylint: disable=deprecated-module
 
-# Avoid useless botan_version.pyc (Python 2.6 or higher)
-if 'dont_write_bytecode' in sys.__dict__:
-    sys.dont_write_bytecode = True
-
-import botan_version # pylint: disable=wrong-import-position
-
-
 # An error caused by and to be fixed by the user, e.g. invalid command line argument
 class UserError(Exception):
     pass
@@ -58,34 +51,81 @@ class InternalError(Exception):
 def flatten(l):
     return sum(l, [])
 
+def parse_version_file(version_path):
+    version_file = open(version_path)
+    key_and_val = re.compile(r"([a-z_]+) = ([a-zA-Z0-9:\-\']+)")
+
+    results = {}
+    for line in version_file.readlines():
+        if not line or line[0] == '#':
+            continue
+        match = key_and_val.match(line)
+        if match:
+            key = match.group(1)
+            val = match.group(2)
+
+            if val == 'None':
+                val = None
+            elif val.startswith("'") and val.endswith("'"):
+                val = val[1:len(val)-1]
+            else:
+                val = int(val)
+
+            results[key] = val
+    return results
 
 class Version(object):
     """
     Version information are all static members
     """
-    major = botan_version.release_major
-    minor = botan_version.release_minor
-    patch = botan_version.release_patch
-    so_rev = botan_version.release_so_abi_rev
-    release_type = botan_version.release_type
-    datestamp = botan_version.release_datestamp
-    packed = major * 1000 + minor # Used on Darwin for dylib versioning
-    _vc_rev = None
+    data = {}
+
+    @staticmethod
+    def get_data():
+        if not Version.data:
+            root_dir = os.path.dirname(sys.argv[0])
+            Version.data = parse_version_file(os.path.join(root_dir, 'version.txt'))
+        return Version.data
+
+    @staticmethod
+    def major():
+        return Version.get_data()["release_major"]
+
+    @staticmethod
+    def minor():
+        return Version.get_data()["release_minor"]
+
+    @staticmethod
+    def patch():
+        return Version.get_data()["release_patch"]
+
+    @staticmethod
+    def packed():
+         # Used on Darwin for dylib versioning
+        return Version.major() * 1000 + Version.minor()
+
+    @staticmethod
+    def so_rev():
+        return Version.get_data()["release_so_abi_rev"]
+
+    @staticmethod
+    def release_type():
+        return Version.get_data()["release_type"]
+
+    @staticmethod
+    def datestamp():
+        return Version.get_data()["release_datestamp"]
 
     @staticmethod
     def as_string():
-        return '%d.%d.%d' % (Version.major, Version.minor, Version.patch)
+        return '%d.%d.%d' % (Version.major(), Version.minor(), Version.patch())
 
     @staticmethod
     def vc_rev():
         # Lazy load to ensure _local_repo_vc_revision() does not run before logger is set up
-        if Version._vc_rev is None:
-            Version._vc_rev = botan_version.release_vc_rev
-        if Version._vc_rev is None:
-            Version._vc_rev = Version._local_repo_vc_revision()
-        if Version._vc_rev is None:
-            Version._vc_rev = 'unknown'
-        return Version._vc_rev
+        if Version.get_data()["release_vc_rev"] is None:
+            Version.data["release_vc_rev"] = Version._local_repo_vc_revision()
+        return Version.get_data()["release_vc_rev"]
 
     @staticmethod
     def _local_repo_vc_revision():
@@ -103,7 +143,7 @@ class Version(object):
             if vc.returncode != 0:
                 logging.debug('Error getting rev from %s - %d (%s)'
                               % (cmdname, vc.returncode, stderr))
-                return None
+                return 'unknown'
 
             rev = str(stdout).strip()
             logging.debug('%s reported revision %s' % (cmdname, rev))
@@ -111,7 +151,8 @@ class Version(object):
             return '%s:%s' % (cmdname, rev)
         except OSError as e:
             logging.debug('Error getting rev from %s - %s' % (cmdname, e.strerror))
-            return None
+            return 'unknown'
+
 
 
 class SourcePaths(object):
@@ -128,12 +169,13 @@ class SourcePaths(object):
 
         # dirs in src/
         self.build_data_dir = os.path.join(self.src_dir, 'build-data')
+        self.configs_dir = os.path.join(self.src_dir, 'configs')
         self.lib_dir = os.path.join(self.src_dir, 'lib')
         self.python_dir = os.path.join(self.src_dir, 'python')
         self.scripts_dir = os.path.join(self.src_dir, 'scripts')
 
-        # dirs in src/build-data/
-        self.sphinx_config_dir = os.path.join(self.build_data_dir, 'sphinx')
+        # subdirs of src/
+        self.sphinx_config_dir = os.path.join(self.configs_dir, 'sphinx')
         self.makefile_dir = os.path.join(self.build_data_dir, 'makefile')
 
 
@@ -183,6 +225,15 @@ class BuildPaths(object): # pylint: disable=too-many-instance-attributes
         self.cli_headers = list(find_headers_in(source_paths.src_dir, 'cli'))
         self.test_sources = list(find_sources_in(source_paths.src_dir, 'tests'))
 
+        if options.build_fuzzers:
+            self.fuzzer_sources = list(find_sources_in(source_paths.src_dir, 'fuzzer'))
+            self.fuzzer_output_dir = os.path.join(self.build_dir, 'fuzzer')
+            self.fuzzobj_dir = os.path.join(self.build_dir, 'obj', 'fuzzer')
+        else:
+            self.fuzzer_sources = None
+            self.fuzzer_output_dir = None
+            self.fuzzobj_dir = None
+
     def build_dirs(self):
         out = [
             self.libobj_dir,
@@ -195,6 +246,9 @@ class BuildPaths(object): # pylint: disable=too-many-instance-attributes
         ]
         if self.doc_output_dir_doxygen:
             out += [self.doc_output_dir_doxygen]
+        if self.fuzzer_output_dir:
+            out += [self.fuzzobj_dir]
+            out += [self.fuzzer_output_dir]
         return out
 
     def src_info(self, typ):
@@ -204,9 +258,13 @@ class BuildPaths(object): # pylint: disable=too-many-instance-attributes
             return (self.cli_sources, self.cliobj_dir)
         elif typ == 'test':
             return (self.test_sources, self.testobj_dir)
+        elif typ == 'fuzzer':
+            return (self.fuzzer_sources, self.fuzzobj_dir)
+        else:
+            raise InternalError("Unknown src info type '%s'" % (typ))
 
 
-PKG_CONFIG_FILENAME = 'botan-%d.pc' % (Version.major)
+PKG_CONFIG_FILENAME = 'botan-%d.pc' % (Version.major())
 
 
 def make_build_doc_commands(source_paths, build_paths, options):
@@ -254,6 +312,12 @@ def process_command_line(args): # pylint: disable=too-many-locals
 
     target_group.add_option('--cc', dest='compiler',
                             help='set the desired build compiler')
+
+    target_group.add_option('--cc-min-version', dest='cc_min_version', default=None,
+                            metavar='MAJOR.MINOR',
+                            help='Set the minimal version of the target compiler. ' \
+                                 'Use --cc-min-version=0.0 to support all compiler versions. ' \
+                                 'Default is auto detection.')
 
     target_group.add_option('--cc-bin', dest='compiler_binary',
                             metavar='BINARY',
@@ -409,7 +473,14 @@ def process_command_line(args): # pylint: disable=too-many-locals
                            help='Generate CMakeLists.txt which can be used to create many IDEs project files')
 
     build_group.add_option('--unsafe-fuzzer-mode', action='store_true', default=False,
-                           help='disable essential checks for testing')
+                           help='Disable essential checks for testing')
+
+    build_group.add_option('--build-fuzzers=', dest='build_fuzzers',
+                           metavar='TYPE', default=None,
+                           help='Build fuzzers (afl, libfuzzer, klee, test)')
+
+    build_group.add_option('--with-fuzzer-lib=', metavar='LIB', default=None, dest='fuzzer_lib',
+                           help='additionally link in LIB')
 
     mods_group = optparse.OptionGroup(parser, 'Module selection')
 
@@ -432,7 +503,7 @@ def process_command_line(args): # pylint: disable=too-many-locals
                           help='minimize build')
 
     # Should be derived from info.txt but this runs too early
-    third_party = ['boost', 'bzip2', 'lzma', 'openssl', 'sqlite3', 'zlib', 'tpm']
+    third_party = ['bearssl', 'boost', 'bzip2', 'lzma', 'openssl', 'sqlite3', 'zlib', 'tpm']
 
     for mod in third_party:
         mods_group.add_option('--with-%s' % (mod),
@@ -458,7 +529,8 @@ def process_command_line(args): # pylint: disable=too-many-locals
     install_group.add_option('--prefix', metavar='DIR',
                              help='set the install prefix')
     install_group.add_option('--destdir', metavar='DIR',
-                             help='set the install directory')
+                             help='set the destination prefix (REMOVED, use DESTDIR ' \
+                                  'environment variable when calling \'make install\')')
     install_group.add_option('--docdir', metavar='DIR',
                              help='set the doc install dir')
     install_group.add_option('--bindir', metavar='DIR',
@@ -817,7 +889,7 @@ class ModuleInfo(InfoObject):
     def compatible_os(self, os_name):
         return self.os == [] or os_name in self.os
 
-    def compatible_compiler(self, ccinfo, cc_version, arch):
+    def compatible_compiler(self, ccinfo, cc_min_version, arch):
         # Check if this compiler supports the flags we need
         def supported_isa_flags(ccinfo, arch):
             for isa in self.need_isa:
@@ -826,23 +898,31 @@ class ModuleInfo(InfoObject):
             return True
 
         # Check if module gives explicit compiler dependencies
-        def supported_compiler(ccinfo, cc_version):
+        def supported_compiler(ccinfo, cc_min_version):
+            if self.cc == []:
+                # no compiler restriction
+                return True
 
-            if self.cc == [] or ccinfo.basename in self.cc:
+            if ccinfo.basename in self.cc:
+                # compiler is supported, independent of version
                 return True
 
             # Maybe a versioned compiler dep
-            if cc_version != None:
-                for cc in self.cc:
-                    with_version = cc.find(':')
-                    if with_version > 0:
-                        if cc[0:with_version] == ccinfo.basename:
-                            min_cc_version = [int(v) for v in cc[with_version+1:].split('.')]
-                            cur_cc_version = [int(v) for v in cc_version.split('.')]
-                            # With lists of ints, this does what we want
-                            return cur_cc_version >= min_cc_version
+            for cc in self.cc:
+                try:
+                    name, version = cc.split(":")
+                    if name == ccinfo.basename:
+                        min_cc_version = [int(v) for v in version.split('.')]
+                        cur_cc_version = [int(v) for v in cc_min_version.split('.')]
+                        # With lists of ints, this does what we want
+                        return cur_cc_version >= min_cc_version
+                except ValueError:
+                    # No version part specified
+                    pass
 
-        return supported_isa_flags(ccinfo, arch) and supported_compiler(ccinfo, cc_version)
+            return False # compiler not listed
+
+        return supported_isa_flags(ccinfo, arch) and supported_compiler(ccinfo, cc_min_version)
 
     def dependencies(self):
         # base is an implicit dep for all submodules
@@ -1093,22 +1173,22 @@ class CompilerInfo(InfoObject): # pylint: disable=too-many-instance-attributes
 
         if options.with_coverage_info:
             if self.coverage_flags == '':
-                raise InternalError('No coverage handling for %s' % (self.basename))
+                raise UserError('No coverage handling for %s' % (self.basename))
             abi_link.append(self.coverage_flags)
 
         if options.with_sanitizers:
             if self.sanitizer_flags == '':
-                raise InternalError('No sanitizer handling for %s' % (self.basename))
+                raise UserError('No sanitizer handling for %s' % (self.basename))
             abi_link.append(self.sanitizer_flags)
 
         if options.with_openmp:
             if 'openmp' not in self.mach_abi_linking:
-                raise InternalError('No support for OpenMP for %s' % (self.basename))
+                raise UserError('No support for OpenMP for %s' % (self.basename))
             abi_link.append(self.mach_abi_linking['openmp'])
 
         if options.with_cilkplus:
             if 'cilkplus' not in self.mach_abi_linking:
-                raise InternalError('No support for Cilk Plus for %s' % (self.basename))
+                raise UserError('No support for Cilk Plus for %s' % (self.basename))
             abi_link.append(self.mach_abi_linking['cilkplus'])
 
         abi_flags = ' '.join(sorted(abi_link))
@@ -1162,10 +1242,10 @@ class CompilerInfo(InfoObject): # pylint: disable=too-many-instance-attributes
 
     @staticmethod
     def _so_link_search(osname, debug_info):
+        so_link_typ = [osname, 'default']
         if debug_info:
-            return [osname + '-debug', 'default-debug']
-        else:
-            return [osname, 'default']
+            so_link_typ = [l + '-debug' for l in so_link_typ] + so_link_typ
+        return so_link_typ
 
     def so_link_command_for(self, osname, options):
         """
@@ -1694,17 +1774,21 @@ class MakefileListsGenerator(object):
 
         return set()
 
+    def _fuzzer_bin_list(self, fuzzer_objs, bin_dir):
+        for obj in fuzzer_objs:
+            (_, name) = os.path.split(os.path.normpath(obj))
+            name = name.replace('.' + self._osinfo.obj_suffix, '')
+            yield os.path.join(bin_dir, name)
+
     def _objectfile_list(self, sources, obj_dir):
+        obj_suffix = '.' + self._osinfo.obj_suffix
+
         for src in sources:
             (directory, filename) = os.path.split(os.path.normpath(src))
-
             parts = directory.split(os.sep)
+
             if 'src' in parts:
                 parts = parts[parts.index('src')+2:]
-            elif 'tests' in parts:
-                parts = parts[parts.index('tests')+2:]
-            elif 'cli' in parts:
-                parts = parts[parts.index('cli'):]
             elif filename.find('botan_all') != -1:
                 parts = []
             else:
@@ -1731,43 +1815,53 @@ class MakefileListsGenerator(object):
             else:
                 name = filename
 
-            for src_suffix in ['.cpp', '.S']:
-                name = name.replace(src_suffix, '.' + self._osinfo.obj_suffix)
-
+            name = name.replace('.cpp', obj_suffix)
             yield os.path.join(obj_dir, name)
 
-    def _build_commands(self, sources, obj_dir, flags):
+    def _build_commands(self, sources, obj_dir, objects, flags):
         """
         Form snippets of makefile for building each source file
         """
-
         includes = self._cc.add_include_dir_option + self._build_paths.include_dir
         if self._build_paths.external_headers:
             includes += ' ' + self._cc.add_include_dir_option + self._build_paths.external_include_dir
         if self._options.with_external_includedir:
             includes += ' ' + self._cc.add_include_dir_option + self._options.with_external_includedir
 
-        for (obj_file, src) in zip(self._objectfile_list(sources, obj_dir), sources):
+        is_fuzzer = obj_dir.find('fuzzer') != -1
+
+        for (obj_file, src) in zip(objects, sources):
             isa_specific_flags_str = "".join([" %s" % flagset for flagset in sorted(self._isa_specific_flags(src))])
+
             yield '%s: %s\n\t$(CXX)%s $(%s_FLAGS) %s %s %s %s$@\n' % (
-                obj_file,
-                src,
-                isa_specific_flags_str,
-                flags,
-                includes,
-                self._cc.compile_flags,
-                src,
-                self._cc.output_to_option)
+                obj_file, src, isa_specific_flags_str, flags,
+                includes, self._cc.compile_flags, src, self._cc.output_to_option)
+
+            if is_fuzzer:
+                fuzz_basename = os.path.basename(obj_file).replace('.' + self._osinfo.obj_suffix, '')
+                fuzz_bin = self._build_paths.fuzzer_output_dir
+                yield '%s: %s $(LIBRARIES)\n\t$(FUZZER_LINK_CMD) %s $(FUZZER_LINKS_TO) %s$@\n' % (
+                    os.path.join(fuzz_bin, fuzz_basename), obj_file, obj_file, self._cc.output_to_option)
 
     def generate(self):
         out = {}
-        for t in ['lib', 'cli', 'test']:
-            obj_key = '%s_objs' % (t)
+
+        targets = ['lib', 'cli', 'test'] + \
+                  (['fuzzer'] if self._options.build_fuzzers else [])
+
+        for t in targets:
             src_list, src_dir = self._build_paths.src_info(t)
             src_list.sort()
-            out[obj_key] = makefile_list(self._objectfile_list(src_list, src_dir))
+            objects = list(self._objectfile_list(src_list, src_dir))
+
+            obj_key = '%s_objs' % (t)
+            out[obj_key] = makefile_list(objects)
+
+            if t == 'fuzzer':
+                out['fuzzer_bin'] = makefile_list(self._fuzzer_bin_list(objects, self._build_paths.fuzzer_output_dir))
+
             build_key = '%s_build_cmds' % (t)
-            out[build_key] = '\n'.join(self._build_commands(src_list, src_dir, t.upper()))
+            out[build_key] = '\n'.join(self._build_commands(src_list, src_dir, objects, t.upper()))
         return out
 
 
@@ -1804,7 +1898,7 @@ class HouseEccCurve(object):
         return "\\\n" + ' \\\n'.join(lines)
 
 
-def create_template_vars(source_paths, build_config, options, modules, cc, arch, osinfo):
+def create_template_vars(source_paths, build_config, options, modules, cc, arch, osinfo): #pylint: disable=too-many-locals,too-many-branches
     """
     Create the template variables needed to process the makefile, build.h, etc
     """
@@ -1833,6 +1927,7 @@ def create_template_vars(source_paths, build_config, options, modules, cc, arch,
                         exceptions = match.group(1).split(',')
                         if osinfo.basename not in exceptions:
                             libs |= set(module_link_to)
+
         return sorted(libs)
 
     def choose_mp_bits():
@@ -1855,16 +1950,18 @@ def create_template_vars(source_paths, build_config, options, modules, cc, arch,
         main_executable = os.path.basename(sys.argv[0])
         return ' '.join([main_executable] + sys.argv[1:])
 
+    bin_link_cmd = cc.binary_link_command_for(osinfo.basename, options) + external_link_cmd()
+
     variables = {
-        'version_major':  Version.major,
-        'version_minor':  Version.minor,
-        'version_patch':  Version.patch,
+        'version_major':  Version.major(),
+        'version_minor':  Version.minor(),
+        'version_patch':  Version.patch(),
         'version_vc_rev': Version.vc_rev(),
-        'so_abi_rev':     Version.so_rev,
+        'so_abi_rev':     Version.so_rev(),
         'version':        Version.as_string(),
-        'version_packed': Version.packed,
-        'release_type':   Version.release_type,
-        'version_datestamp': Version.datestamp,
+        'version_packed': Version.packed(),
+        'release_type':   Version.release_type(),
+        'version_datestamp': Version.datestamp(),
 
         'distribution_info': options.distribution_info,
 
@@ -1881,7 +1978,6 @@ def create_template_vars(source_paths, build_config, options, modules, cc, arch,
         'program_suffix': options.program_suffix or osinfo.program_suffix,
 
         'prefix': options.prefix or osinfo.install_root,
-        'destdir': options.destdir or options.prefix or osinfo.install_root,
         'bindir': options.bindir or osinfo.bin_dir,
         'libdir': options.libdir or osinfo.lib_dir,
         'includedir': options.includedir or osinfo.header_dir,
@@ -1897,6 +1993,9 @@ def create_template_vars(source_paths, build_config, options, modules, cc, arch,
         'libobj_dir': build_config.libobj_dir,
         'cliobj_dir': build_config.cliobj_dir,
         'testobj_dir': build_config.testobj_dir,
+        'fuzzobj_dir': build_config.fuzzobj_dir,
+
+        'fuzzer_output_dir': build_config.fuzzer_output_dir if build_config.fuzzer_output_dir else '',
 
         'doc_output_dir': build_config.doc_output_dir,
 
@@ -1924,8 +2023,9 @@ def create_template_vars(source_paths, build_config, options, modules, cc, arch,
         'visibility_attribute': cc.gen_visibility_attribute(options),
 
         'lib_link_cmd': cc.so_link_command_for(osinfo.basename, options) + external_link_cmd(),
-        'cli_link_cmd': cc.binary_link_command_for(osinfo.basename, options) + external_link_cmd(),
-        'test_link_cmd': cc.binary_link_command_for(osinfo.basename, options) + external_link_cmd(),
+        'cli_link_cmd': bin_link_cmd,
+        'test_link_cmd': bin_link_cmd,
+        'fuzzer_link_cmd': bin_link_cmd,
 
         'link_to': ' '.join(
             [cc.add_lib_option + lib for lib in link_to('libs')] +
@@ -1944,7 +2044,9 @@ def create_template_vars(source_paths, build_config, options, modules, cc, arch,
 
         'include_files': makefile_list(build_config.public_headers),
 
-        'unsafe_fuzzer_mode_define': '' if not options.unsafe_fuzzer_mode else '#define BOTAN_UNSAFE_FUZZER_MODE',
+        'unsafe_fuzzer_mode_define': '#define BOTAN_UNSAFE_FUZZER_MODE' if options.unsafe_fuzzer_mode else '',
+        'fuzzer_type': '#define BOTAN_FUZZER_IS_%s' % (options.build_fuzzers.upper()) if options.build_fuzzers else '',
+        'fuzzer_libs': '' if options.fuzzer_lib is None else '%s%s' % (cc.add_lib_option, options.fuzzer_lib),
 
         'ar_command': cc.ar_command or osinfo.ar_command,
         'ranlib_command': osinfo.ranlib_command(),
@@ -1967,24 +2069,24 @@ def create_template_vars(source_paths, build_config, options, modules, cc, arch,
 
         if osinfo.soname_pattern_base != None:
             variables['soname_base'] = osinfo.soname_pattern_base.format(
-                version_major=Version.major,
-                version_minor=Version.minor,
-                version_patch=Version.patch,
-                abi_rev=Version.so_rev)
+                version_major=Version.major(),
+                version_minor=Version.minor(),
+                version_patch=Version.patch(),
+                abi_rev=Version.so_rev())
 
         if osinfo.soname_pattern_abi != None:
             variables['soname_abi'] = osinfo.soname_pattern_abi.format(
-                version_major=Version.major,
-                version_minor=Version.minor,
-                version_patch=Version.patch,
-                abi_rev=Version.so_rev)
+                version_major=Version.major(),
+                version_minor=Version.minor(),
+                version_patch=Version.patch(),
+                abi_rev=Version.so_rev())
 
         if osinfo.soname_pattern_patch != None:
             variables['soname_patch'] = osinfo.soname_pattern_patch.format(
-                version_major=Version.major,
-                version_minor=Version.minor,
-                version_patch=Version.patch,
-                abi_rev=Version.so_rev)
+                version_major=Version.major(),
+                version_minor=Version.minor(),
+                version_patch=Version.patch(),
+                abi_rev=Version.so_rev())
 
     if options.os == 'darwin' and options.build_shared_lib:
         # In order that these executables work from the build directory,
@@ -2009,22 +2111,38 @@ def create_template_vars(source_paths, build_config, options, modules, cc, arch,
 
         # 'botan' or 'botan-2'. Used in Makefile and install script
         # This can be made consistent over all platforms in the future
-        variables['libname'] = 'botan-%d' % (Version.major)
+        variables['libname'] = 'botan-%d' % (Version.major())
+
+    if options.os == 'llvm':
+        # llvm-link doesn't understand -L or -l flags
+        variables['link_to_botan'] = '%s/lib%s.a' % (variables['out_dir'], variables['libname'])
+    elif options.compiler == 'msvc':
+        # Nmake makefiles do something completely different here...
+        variables['link_to_botan'] = ''
+    else:
+        variables['link_to_botan'] = '%s%s %s%s' % (
+            cc.add_lib_dir_option, variables['out_dir'],
+            cc.add_lib_option, variables['libname'])
 
     variables["header_in"] = process_template(os.path.join(source_paths.makefile_dir, 'header.in'), variables)
 
     if variables["makefile_style"] == "gmake":
-        variables["gmake_commands_in"] = process_template(
-            os.path.join(source_paths.makefile_dir, 'gmake_commands.in'),
-            variables)
-        variables["gmake_dso_in"] = process_template(
-            os.path.join(source_paths.makefile_dir, 'gmake_dso.in'),
-            variables
-            ) if options.build_shared_lib else ''
-        variables["gmake_coverage_in"] = process_template(
-            os.path.join(source_paths.makefile_dir, 'gmake_coverage.in'),
-            variables
-            ) if options.with_coverage_info else ''
+        templates = [
+            ('gmake_commands.in', True),
+            ('gmake_dso.in', options.build_shared_lib),
+            ('gmake_coverage.in', options.with_coverage_info),
+            ('gmake_fuzzers.in', options.build_fuzzers)
+            ]
+
+        for (template, build_it) in templates:
+            template_file = os.path.join(source_paths.makefile_dir, template)
+
+            var_name = template.replace('.', '_')
+
+            if build_it:
+                variables[var_name] = process_template(template_file, variables)
+            else:
+                variables[var_name] = ''
 
     return variables
 
@@ -2033,12 +2151,12 @@ class ModulesChooser(object):
     Determine which modules to load based on options, target, etc
     """
 
-    def __init__(self, modules, module_policy, archinfo, ccinfo, cc_version, options):
+    def __init__(self, modules, module_policy, archinfo, ccinfo, cc_min_version, options):
         self._modules = modules
         self._module_policy = module_policy
         self._archinfo = archinfo
         self._ccinfo = ccinfo
-        self._cc_version = cc_version
+        self._cc_min_version = cc_min_version
         self._options = options
 
         self._maybe_dep = set()
@@ -2054,7 +2172,7 @@ class ModulesChooser(object):
         if not module.compatible_os(self._options.os):
             self._not_using_because['incompatible OS'].add(modname)
             return False
-        elif not module.compatible_compiler(self._ccinfo, self._cc_version, self._archinfo.basename):
+        elif not module.compatible_compiler(self._ccinfo, self._cc_min_version, self._archinfo.basename):
             self._not_using_because['incompatible compiler'].add(modname)
             return False
         elif not module.compatible_cpu(self._archinfo, self._options):
@@ -2321,7 +2439,7 @@ def portable_symlink(file_path, target_dir, method):
 
 class AmalgamationHelper(object):
     _any_include_matcher = re.compile(r'#include <(.*)>$')
-    _botan_include_matcher = re.compile(r'#include <botan/(.*)>$')
+    _botan_include_matcher = re.compile(r'#include <botan/(.*)>')
     _std_include_matcher = re.compile(r'^#include <([^/\.]+|stddef.h)>$')
 
     @staticmethod
@@ -2355,10 +2473,14 @@ class AmalgamationHeader(object):
         self.included_already = set()
         self.all_std_includes = set()
 
+        encoding_kwords = {}
+        if sys.version_info[0] == 3:
+            encoding_kwords['encoding'] = 'utf8'
+
         self.file_contents = {}
         for filepath in sorted(input_filepaths):
             try:
-                with open(filepath) as f:
+                with open(filepath, **encoding_kwords) as f:
                     raw_content = f.readlines()
                 contents = AmalgamationGenerator.strip_header_goop(filepath, raw_content)
                 self.file_contents[os.path.basename(filepath)] = contents
@@ -2378,6 +2500,9 @@ class AmalgamationHeader(object):
         name = name.replace('internal/', '')
 
         if name in self.included_already:
+            return
+
+        if name == 'botan.h':
             return
 
         self.included_already.add(name)
@@ -2432,7 +2557,7 @@ class AmalgamationHeader(object):
 class AmalgamationGenerator(object):
     filename_prefix = 'botan_all'
 
-    _header_guard_pattern = re.compile('^#define BOTAN_.*_H__$')
+    _header_guard_pattern = re.compile('^#define BOTAN_.*_H_$')
 
     @staticmethod
     def strip_header_goop(header_name, header_lines):
@@ -2499,18 +2624,22 @@ class AmalgamationGenerator(object):
         pub_header_amalag = AmalgamationHeader(self._build_paths.public_headers)
         header_name = '%s.h' % (AmalgamationGenerator.filename_prefix)
         logging.info('Writing amalgamation header to %s' % (header_name))
-        pub_header_amalag.write_to_file(header_name, "BOTAN_AMALGAMATION_H__")
+        pub_header_amalag.write_to_file(header_name, "BOTAN_AMALGAMATION_H_")
 
         internal_headers = AmalgamationHeader(self._build_paths.internal_headers)
         header_int_name = '%s_internal.h' % (AmalgamationGenerator.filename_prefix)
         logging.info('Writing amalgamation header to %s' % (header_int_name))
-        internal_headers.write_to_file(header_int_name, "BOTAN_AMALGAMATION_INTERNAL_H__")
+        internal_headers.write_to_file(header_int_name, "BOTAN_AMALGAMATION_INTERNAL_H_")
 
         header_files = [header_name, header_int_name]
         included_in_headers = pub_header_amalag.all_std_includes | internal_headers.all_std_includes
         return header_files, included_in_headers
 
     def _generate_sources(self, amalgamation_headers, included_in_headers): #pylint: disable=too-many-locals,too-many-branches
+        encoding_kwords = {}
+        if sys.version_info[0] == 3:
+            encoding_kwords['encoding'] = 'utf8'
+
         # target to filepath map
         amalgamation_sources = {}
         for mod in self._modules:
@@ -2523,7 +2652,7 @@ class AmalgamationGenerator(object):
         amalgamation_files = {}
         for target, filepath in amalgamation_sources.items():
             logging.info('Writing amalgamation source to %s' % (filepath))
-            amalgamation_files[target] = open(filepath, 'w')
+            amalgamation_files[target] = open(filepath, 'w', **encoding_kwords)
 
         for target, f in amalgamation_files.items():
             AmalgamationHeader.write_banner(f)
@@ -2545,7 +2674,7 @@ class AmalgamationGenerator(object):
         for mod in sorted(self._modules, key=lambda module: module.basename):
             tgt = self._target_for_module(mod)
             for src in sorted(mod.source):
-                with open(src, 'r') as f:
+                with open(src, 'r', **encoding_kwords) as f:
                     for line in f:
                         if AmalgamationHelper.is_botan_include(line):
                             continue
@@ -2571,81 +2700,81 @@ class AmalgamationGenerator(object):
         return amalgamation_sources
 
 
-def detect_compiler_version(ccinfo, cc_bin, os_name):
-    # pylint: disable=too-many-locals
-
-    cc_version_flag = {
-        'msvc': ([], r'Compiler Version ([0-9]+).([0-9]+).[0-9\.]+ for'),
-        'gcc': (['-v'], r'gcc version ([0-9]+.[0-9])+.[0-9]+'),
-        'clang': (['-v'], r'clang version ([0-9]+.[0-9])[ \.]')
+class CompilerDetector(object):
+    _msvc_version_source = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "src", "build-data", "compiler_detection", "msvc_version.c")
+    _version_flags = {
+        'msvc': ['/nologo', '/EP', _msvc_version_source],
+        'gcc': ['-v'],
+        'clang': ['-v'],
+    }
+    _version_patterns = {
+        'msvc': r'^([0-9]{2})([0-9]{2})',
+        'gcc': r'gcc version ([0-9]+)\.([0-9]+)\.[0-9]+',
+        'clang': r'clang version ([0-9]+)\.([0-9])[ \.]',
     }
 
-    cc_name = ccinfo.basename
-    if cc_name not in cc_version_flag.keys():
-        logging.info("No compiler version detection available for %s" % (cc_name))
-        return None
+    def __init__(self, cc_name, cc_bin, os_name):
+        self._cc_name = cc_name
+        self._cc_bin = cc_bin
+        self._os_name = os_name
 
-    (flags, version_re_str) = cc_version_flag[cc_name]
-    cc_cmd = cc_bin.split(' ') + flags
-
-    try:
-        cc_version = None
-
-        version = re.compile(version_re_str)
-        cc_output = subprocess.Popen(cc_cmd,
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE,
-                                     universal_newlines=True).communicate()
-
-        cc_output = str(cc_output)
-        match = version.search(cc_output)
-
-        if match:
-            if cc_name == 'msvc':
-                cl_version_to_msvc_version = {
-                    '18.00': '2013',
-                    '19.00': '2015',
-                    '19.10': '2017'
-                }
-                cl_version = match.group(1) + '.' + match.group(2)
-                if cl_version in cl_version_to_msvc_version:
-                    cc_version = cl_version_to_msvc_version[cl_version]
-                else:
-                    logging.warning('Unable to determine MSVC version from output "%s"' % (cc_output))
-                    return None
-            else:
-                cc_version = match.group(1)
-        elif match is None and cc_name == 'clang' and os_name in ['darwin', 'ios']:
-            xcode_version_to_clang = {
-                '703': '3.8',
-                '800': '3.9',
-                '802': '4.0'
-            }
-
-            version = re.compile(r'Apple LLVM version [0-9.]+ \(clang-([0-9]{3})\.')
-            match = version.search(cc_output)
-
-            if match:
-                apple_clang_version = match.group(1)
-                if apple_clang_version in xcode_version_to_clang:
-                    cc_version = xcode_version_to_clang[apple_clang_version]
-                    logging.info('Mapping Apple Clang version %s to LLVM version %s' % (
-                        apple_clang_version, cc_version))
-                else:
-                    logging.warning('Unable to determine LLVM Clang version cooresponding to Apple Clang %s' %
-                                    (apple_clang_version))
-                    return '3.8' # safe default
-
-        if cc_version is None:
-            logging.warning("Ran '%s' to get %s version, but output '%s' does not match expected version format" % (
-                ' '.join(cc_cmd), cc_name, cc_output))
+    def get_version(self):
+        try:
+            cmd = self._cc_bin.split(' ') + CompilerDetector._version_flags[self._cc_name]
+        except KeyError:
+            logging.info("No compiler version detection available for %s" % (self._cc_name))
             return None
 
-        logging.info('Detected %s compiler version %s' % (cc_name, cc_version))
+        try:
+            stdout, stderr = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True).communicate()
+            cc_output = stdout + "\n" + stderr
+        except OSError as e:
+            logging.warning('Could not execute %s for version check: %s' % (cmd, e))
+            return None
+
+        return self.version_from_compiler_output(cc_output)
+
+    def version_from_compiler_output(self, cc_output):
+        cc_version = None
+
+        match = re.search(CompilerDetector._version_patterns[self._cc_name], cc_output, flags=re.MULTILINE)
+        if match:
+            major = int(match.group(1))
+            minor = int(match.group(2))
+            cc_version = "%d.%d" % (major, minor)
+
+        if cc_version is None and self._cc_name == 'clang' and self._os_name in ['darwin', 'ios']:
+            # For appleclang version >= X, return minimal clang version Y
+            appleclang_to_clang_version = {
+                703: '3.8',
+                800: '3.9',
+                # 802 has no support for clang 4.0 flags -Og and -MJ, 900 has.
+                802: '3.9',
+                900: '4.0',
+            }
+
+            # All appleclang versions without "based on LLVM" note are at least clang 3.7
+            # https://en.wikipedia.org/wiki/Xcode#Latest_versions
+            cc_version = '3.7'
+            match = re.search(r'Apple LLVM version [0-9\.]+ \(clang-([0-9]+)\.', cc_output)
+            if match:
+                user_appleclang = int(match.group(1))
+                for appleclang, clang in sorted(appleclang_to_clang_version.items()):
+                    if user_appleclang >= appleclang:
+                        cc_version = clang
+                logging.info('Mapping Apple Clang version %s to LLVM version %s' % (user_appleclang, cc_version))
+
+        if not cc_version:
+            logging.warning("Tried to get %s version, but output '%s' does not match expected version format" % (
+                self._cc_name, cc_output))
+
         return cc_version
-    except OSError as e:
-        logging.warning('Could not execute %s for version check: %s' % (cc_cmd, e))
-        return None
+
 
 def have_program(program):
     """
@@ -2767,6 +2896,16 @@ def set_defaults_for_unset_options(options, info_arch, info_cc): # pylint: disab
             options.os = system_from_python
         logging.info('Guessing target OS is %s (use --os to set)' % (options.os))
 
+    def deduce_compiler_type_from_cc_bin(cc_bin):
+        if cc_bin.find('clang') != -1:
+            return 'clang'
+        if cc_bin.find('-g++') != -1:
+            return 'gcc'
+        return None
+
+    if options.compiler is None and options.compiler_binary != None:
+        options.compiler = deduce_compiler_type_from_cc_bin(options.compiler_binary)
+
     if options.compiler is None:
         if options.os == 'windows':
             if have_program('g++') and not have_program('cl'):
@@ -2786,8 +2925,7 @@ def set_defaults_for_unset_options(options, info_arch, info_cc): # pylint: disab
             options.compiler = 'gcc'
         else:
             options.compiler = 'gcc'
-        logging.info('Guessing to use compiler %s (use --cc to set)' % (
-            options.compiler))
+        logging.info('Guessing to use compiler %s (use --cc to set)' % (options.compiler))
 
     if options.cpu is None:
         (options.arch, options.cpu) = guess_processor(info_arch)
@@ -2820,11 +2958,16 @@ def canonicalize_options(options, info_os, info_arch):
     else:
         raise UserError('Unknown or unidentifiable processor "%s"' % (options.cpu))
 
+    # Set default fuzzing lib
+    if options.build_fuzzers == 'libfuzzer' and options.fuzzer_lib is None:
+        options.fuzzer_lib = 'Fuzzer'
 
 # Checks user options for consistency
 # This method DOES NOT change options on behalf of the user but explains
 # why the given configuration does not work.
 def validate_options(options, info_os, info_cc, available_module_policies):
+    # pylint: disable=too-many-branches
+
     if options.gen_amalgamation:
         raise UserError("--gen-amalgamation was removed. Migrate to --amalgamation.")
 
@@ -2845,22 +2988,36 @@ def validate_options(options, info_os, info_cc, available_module_policies):
         raise UserError('Unknown compiler "%s"; available options: %s' % (
             options.compiler, ' '.join(sorted(info_cc.keys()))))
 
+    if options.cc_min_version is not None and not re.match(r'^[0-9]+\.[0-9]+$', options.cc_min_version):
+        raise UserError("--cc-min-version must have the format MAJOR.MINOR")
+
     if options.module_policy and options.module_policy not in available_module_policies:
         raise UserError("Unknown module set %s" % options.module_policy)
 
-    # Warnings
+    if options.destdir:
+        raise UserError("--destdir was removed. Use the DESTDIR environment "
+                        "variable instead when calling 'make install'")
 
+    if options.os == 'llvm' or options.cpu == 'llvm':
+        if options.compiler != 'clang':
+            raise UserError('LLVM target requires using Clang')
+        if options.os != options.cpu:
+            raise UserError('LLVM target requires both CPU and OS be set to llvm')
+
+    if options.build_fuzzers != None:
+        if options.build_fuzzers not in ['libfuzzer', 'afl', 'klee', 'test']:
+            raise UserError('Bad value to --build-fuzzers')
+
+        if options.build_fuzzers == 'klee' and options.os != 'llvm':
+            raise UserError('Building for KLEE requires targetting LLVM')
+
+    # Warnings
     if options.os == 'windows' and options.compiler == 'gcc':
         logging.warning('Detected GCC on Windows; use --os=cygwin or --os=mingw?')
 
-def main_action_list_available_modules(info_modules):
-    for modname in sorted(info_modules.keys()):
-        print(modname)
-
-
 def prepare_configure_build(info_modules, source_paths, options,
-                            cc, cc_version, arch, osinfo, module_policy):
-    loaded_module_names = ModulesChooser(info_modules, module_policy, arch, cc, cc_version, options).choose()
+                            cc, cc_min_version, arch, osinfo, module_policy):
+    loaded_module_names = ModulesChooser(info_modules, module_policy, arch, cc, cc_min_version, options).choose()
     using_mods = [info_modules[modname] for modname in loaded_module_names]
 
     build_config = BuildPaths(source_paths, options, using_mods)
@@ -2874,12 +3031,29 @@ def prepare_configure_build(info_modules, source_paths, options,
     return using_mods, build_config, template_vars, makefile_template
 
 
+def calculate_cc_min_version(options, cc, osinfo):
+    if options.cc_min_version:
+        return options.cc_min_version
+    else:
+        cc_version = CompilerDetector(
+            cc.basename,
+            options.compiler_binary or cc.binary_name,
+            osinfo.basename
+        ).get_version()
+        if cc_version:
+            logging.info('Auto-detected compiler version %s' % (cc_version))
+            return cc_version
+        else:
+            logging.warning("Auto-detected compiler version failed. " \
+                            "Use --cc-min-version to set manually. Falling back to version 0.0")
+            return "0.0"
+
 def main_action_configure_build(info_modules, source_paths, options,
-                                cc, cc_version, arch, osinfo, module_policy):
+                                cc, cc_min_version, arch, osinfo, module_policy):
     # pylint: disable=too-many-locals
 
     using_mods, build_config, template_vars, makefile_template = prepare_configure_build(
-        info_modules, source_paths, options, cc, cc_version, arch, osinfo, module_policy)
+        info_modules, source_paths, options, cc, cc_min_version, arch, osinfo, module_policy)
 
     # Now we start writing to disk
 
@@ -2957,11 +3131,11 @@ def main_action_configure_build(info_modules, source_paths, options,
             return 'undated'
         return 'dated %d' % (datestamp)
 
-    logging.info('Botan %s (VC %s) (%s %s) build setup is complete' % (
+    logging.info('Botan %s (revision %s) (%s %s) build setup is complete' % (
         Version.as_string(),
         Version.vc_rev(),
-        Version.release_type,
-        release_date(Version.datestamp)))
+        Version.release_type(),
+        release_date(Version.datestamp())))
 
     if options.unsafe_fuzzer_mode:
         logging.warning("The fuzzer mode flag is labeled unsafe for a reason, this version is for testing only")
@@ -2976,13 +3150,19 @@ def main(argv):
 
     setup_logging(options)
 
+    source_paths = SourcePaths(os.path.dirname(argv[0]))
+
+    info_modules = load_info_files(source_paths.lib_dir, 'Modules', "info.txt", ModuleInfo)
+
+    if options.list_modules:
+        for mod in sorted(info_modules.keys()):
+            print(mod)
+        return 0
+
     logging.info('%s invoked with options "%s"' % (argv[0], ' '.join(argv[1:])))
     logging.info('Platform: OS="%s" machine="%s" proc="%s"' % (
         platform.system(), platform.machine(), platform.processor()))
 
-    source_paths = SourcePaths(os.path.dirname(argv[0]))
-
-    info_modules = load_info_files(source_paths.lib_dir, 'Modules', "info.txt", ModuleInfo)
     info_arch = load_build_data_info_files(source_paths, 'CPU info', 'arch', ArchInfo)
     info_os = load_build_data_info_files(source_paths, 'OS info', 'os', OsInfo)
     info_cc = load_build_data_info_files(source_paths, 'compiler info', 'cc', CompilerInfo)
@@ -3004,27 +3184,22 @@ def main(argv):
     canonicalize_options(options, info_os, info_arch)
     validate_options(options, info_os, info_cc, info_module_policies)
 
-    logging.info('Target is %s-%s-%s-%s' % (
-        options.compiler, options.os, options.arch, options.cpu))
-
     cc = info_cc[options.compiler]
     arch = info_arch[options.arch]
     osinfo = info_os[options.os]
     module_policy = info_module_policies[options.module_policy] if options.module_policy else None
+    cc_min_version = calculate_cc_min_version(options, cc, osinfo)
 
-    cc_version = detect_compiler_version(cc, options.compiler_binary or cc.binary_name, osinfo.basename)
+    logging.info('Target is %s:%s-%s-%s-%s' % (
+        options.compiler, cc_min_version, options.os, options.arch, options.cpu))
 
     if options.build_shared_lib and not osinfo.building_shared_supported:
         logging.warning('Shared libs not supported on %s, disabling shared lib support' % (osinfo.basename))
         options.build_shared_lib = False
 
-    if options.list_modules:
-        main_action_list_available_modules(info_modules)
-        return 0
-    else:
-        main_action_configure_build(info_modules, source_paths, options, cc, cc_version, arch, osinfo, module_policy)
-        return 0
-
+    main_action_configure_build(info_modules, source_paths, options,
+                                cc, cc_min_version, arch, osinfo, module_policy)
+    return 0
 
 if __name__ == '__main__':
     try:

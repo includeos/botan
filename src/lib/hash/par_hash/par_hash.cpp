@@ -18,7 +18,7 @@ void Parallel::add_data(const uint8_t input[], size_t length)
 
 void Parallel::final_result(uint8_t out[])
    {
-   uint32_t offset = 0;
+   size_t offset = 0;
 
    for(auto&& hash : m_hashes)
       {
@@ -54,6 +54,18 @@ HashFunction* Parallel::clone() const
       hash_copies.push_back(std::unique_ptr<HashFunction>(hash->clone()));
 
    return new Parallel(hash_copies);
+   }
+
+std::unique_ptr<HashFunction> Parallel::copy_state() const
+   {
+   std::vector<std::unique_ptr<HashFunction>> hash_clones;
+
+   for(const std::unique_ptr<HashFunction>& hash : m_hashes)
+      {
+      hash_clones.push_back(hash->copy_state());
+      }
+
+   return std::unique_ptr<HashFunction>(new Parallel(hash_clones));
    }
 
 void Parallel::clear()

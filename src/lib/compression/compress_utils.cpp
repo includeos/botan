@@ -7,18 +7,14 @@
 
 #include <botan/internal/compress_utils.h>
 #include <botan/exceptn.h>
+#include <cstdlib>
 
 namespace Botan {
 
 void* Compression_Alloc_Info::do_malloc(size_t n, size_t size)
    {
-   const size_t total_size = n * size;
-
-   BOTAN_ASSERT_EQUAL(total_size / size, n, "Overflow check");
-
    // TODO maximum length check here?
-
-   void* ptr = std::malloc(total_size);
+   void* ptr = std::calloc(n, size);
 
    /*
    * Return null rather than throwing here as we are being called by a
@@ -30,8 +26,7 @@ void* Compression_Alloc_Info::do_malloc(size_t n, size_t size)
 
    if(ptr)
       {
-      std::memset(ptr, 0, total_size);
-      m_current_allocs[ptr] = total_size;
+      m_current_allocs[ptr] = n * size;
       }
 
    return ptr;
@@ -66,6 +61,12 @@ void Stream_Compression::process(secure_vector<uint8_t>& buf, size_t offset, uin
    {
    BOTAN_ASSERT(m_stream, "Initialized");
    BOTAN_ASSERT(buf.size() >= offset, "Offset is sane");
+
+   // bzip doesn't like being called with no input and BZ_RUN
+   if(buf.size() == offset && flags == m_stream->run_flag())
+      {
+      return;
+      }
 
    if(m_buffer.size() < buf.size() + offset)
       m_buffer.resize(buf.size() + offset);

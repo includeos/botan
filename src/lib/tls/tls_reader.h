@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_TLS_READER_H__
-#define BOTAN_TLS_READER_H__
+#ifndef BOTAN_TLS_READER_H_
+#define BOTAN_TLS_READER_H_
 
 #include <botan/exceptn.h>
 #include <botan/secmem.h>
@@ -21,7 +21,7 @@ namespace TLS {
 /**
 * Helper class for decoding TLS protocol messages
 */
-class TLS_Data_Reader
+class TLS_Data_Reader final
    {
    public:
       TLS_Data_Reader(const char* type, const std::vector<uint8_t>& buf_in) :
@@ -119,7 +119,7 @@ class TLS_Data_Reader
          std::vector<uint8_t> v =
             get_range_vector<uint8_t>(len_bytes, min_bytes, max_bytes);
 
-         return std::string(reinterpret_cast<char*>(v.data()), v.size());
+         return std::string(cast_uint8_ptr_to_char(v.data()), v.size());
          }
 
       template<typename T>
@@ -219,7 +219,7 @@ void append_tls_length_value(std::vector<uint8_t, Alloc>& buf,
                              size_t tag_size)
    {
    append_tls_length_value(buf,
-                           reinterpret_cast<const uint8_t*>(str.data()),
+                           cast_char_ptr_to_uint8(str.data()),
                            str.size(),
                            tag_size);
    }

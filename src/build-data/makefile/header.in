@@ -11,15 +11,15 @@ CLI_LINK_CMD   = %{cli_link_cmd}
 TEST_LINK_CMD  = %{test_link_cmd}
 
 LIB_LINKS_TO   = %{link_to}
-CLI_LINKS_TO   = $(LIB_LINKS_TO)
-TEST_LINKS_TO  = $(LIB_LINKS_TO)
+CLI_LINKS_TO   = %{link_to_botan} $(LIB_LINKS_TO)
+TEST_LINKS_TO  = %{link_to_botan} $(LIB_LINKS_TO)
 
 LIB_FLAGS      = $(SO_OBJ_FLAGS) $(CXXFLAGS) $(WARN_FLAGS)
 CLI_FLAGS      = $(CXXFLAGS) $(WARN_FLAGS)
 TEST_FLAGS     = $(CXXFLAGS) $(WARN_FLAGS)
 
 SCRIPTS_DIR    = %{scripts_dir}
-INSTALLED_LIB_DIR = %{destdir}/%{libdir}
+INSTALLED_LIB_DIR = %{prefix}/%{libdir}
 
 CLI_POST_LINK_CMD  = %{cli_post_link_cmd}
 TEST_POST_LINK_CMD = %{test_post_link_cmd}

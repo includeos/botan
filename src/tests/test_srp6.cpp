@@ -14,8 +14,9 @@ namespace Botan_Tests {
 
 namespace {
 
-#if defined(BOTAN_HAS_SRP6)
-class SRP6_Unit_Tests : public Test
+#if defined(BOTAN_HAS_SRP6) && defined(BOTAN_HAS_SHA2_32)
+
+class SRP6_Unit_Tests final : public Test
    {
    public:
       std::vector<Test::Result> run() override

@@ -7,7 +7,6 @@
 
 #include <botan/misty1.h>
 #include <botan/loadstor.h>
-#include <botan/parsing.h>
 
 namespace Botan {
 
@@ -94,7 +93,7 @@ uint16_t FI(uint16_t input, uint16_t key7, uint16_t key9)
    D9 = MISTY1_SBOX_S9[D9] ^ D7;
    D7 = (MISTY1_SBOX_S7[D7] ^ key7 ^ D9) & 0x7F;
    D9 = MISTY1_SBOX_S9[D9 ^ key9] ^ D7;
-   return static_cast<uint16_t>((D7 << 9) | D9);
+   return static_cast<uint16_t>(D7 << 9) | D9;
    }
 
 }
@@ -120,7 +119,7 @@ void MISTY1::encrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
          B3 ^= B2 & RK[2];
          B2 ^= B3 | RK[3];
 
-         uint32_t T0, T1;
+         uint16_t T0, T1;
 
          T0  = FI(B0 ^ RK[ 4], RK[ 5], RK[ 6]) ^ B1;
          T1  = FI(B1 ^ RK[ 7], RK[ 8], RK[ 9]) ^ T0;
@@ -170,7 +169,7 @@ void MISTY1::decrypt_n(const uint8_t in[], uint8_t out[], size_t blocks) const
          B0 ^= B1 | RK[2];
          B1 ^= B0 & RK[3];
 
-         uint32_t T0, T1;
+         uint16_t T0, T1;
 
          T0  = FI(B2 ^ RK[ 4], RK[ 5], RK[ 6]) ^ B3;
          T1  = FI(B3 ^ RK[ 7], RK[ 8], RK[ 9]) ^ T0;

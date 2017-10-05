@@ -6,16 +6,15 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_TLS_RECORDS_H__
-#define BOTAN_TLS_RECORDS_H__
+#ifndef BOTAN_TLS_RECORDS_H_
+#define BOTAN_TLS_RECORDS_H_
 
 #include <botan/tls_magic.h>
 #include <botan/tls_version.h>
 #include <botan/aead.h>
-#include <botan/block_cipher.h>
-#include <botan/mac.h>
 #include <vector>
 #include <chrono>
+#include <functional>
 
 namespace Botan {
 
@@ -29,7 +28,7 @@ class Connection_Sequence_Numbers;
 /**
 * TLS Cipher State
 */
-class Connection_Cipher_State
+class Connection_Cipher_State final
    {
    public:
       /**
@@ -72,7 +71,7 @@ class Connection_Cipher_State
       bool m_cbc_nonce;
    };
 
-class Record
+class Record final
    {
    public:
       Record(secure_vector<uint8_t>& data,
@@ -100,7 +99,7 @@ class Record
       size_t m_size;
    };
 
-class Record_Message
+class Record_Message final
    {
    public:
       Record_Message(const uint8_t* data, size_t size)
@@ -121,7 +120,7 @@ class Record_Message
       size_t m_size;
 };
 
-class Record_Raw_Input
+class Record_Raw_Input final
    {
    public:
       Record_Raw_Input(const uint8_t* data, size_t size, size_t& consumed,

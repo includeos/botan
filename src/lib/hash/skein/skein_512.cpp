@@ -6,7 +6,6 @@
 */
 
 #include <botan/skein_512.h>
-#include <botan/parsing.h>
 #include <botan/exceptn.h>
 #include <algorithm>
 
@@ -36,6 +35,18 @@ std::string Skein_512::name() const
 HashFunction* Skein_512::clone() const
    {
    return new Skein_512(m_output_bits, m_personalization);
+   }
+
+std::unique_ptr<HashFunction> Skein_512::copy_state() const
+   {
+   std::unique_ptr<Skein_512> copy(new Skein_512(m_output_bits, m_personalization));
+
+   copy->m_threefish->m_K = this->m_threefish->m_K;
+   copy->m_T = this->m_T;
+   copy->m_buffer = this->m_buffer;
+   copy->m_buf_pos = this->m_buf_pos;
+
+   return std::move(copy);
    }
 
 void Skein_512::clear()
@@ -78,7 +89,7 @@ void Skein_512::initial_block()
       if(m_personalization.length() > 64)
          throw Invalid_Argument("Skein personalization must be less than 64 bytes");
 
-      const uint8_t* bits = reinterpret_cast<const uint8_t*>(m_personalization.data());
+      const uint8_t* bits = cast_char_ptr_to_uint8(m_personalization.data());
       reset_tweak(SKEIN_PERSONALIZATION, true);
       ubi_512(bits, m_personalization.length());
       }

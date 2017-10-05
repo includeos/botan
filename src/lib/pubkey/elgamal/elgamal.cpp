@@ -11,6 +11,7 @@
 #include <botan/reducer.h>
 #include <botan/blinding.h>
 #include <botan/workfactor.h>
+#include <botan/pow_mod.h>
 
 namespace Botan {
 
@@ -66,7 +67,7 @@ namespace {
 /**
 * ElGamal encryption operation
 */
-class ElGamal_Encryption_Operation : public PK_Ops::Encryption_with_EME
+class ElGamal_Encryption_Operation final : public PK_Ops::Encryption_with_EME
    {
    public:
 
@@ -118,7 +119,7 @@ ElGamal_Encryption_Operation::raw_encrypt(const uint8_t msg[], size_t msg_len,
 /**
 * ElGamal decryption operation
 */
-class ElGamal_Decryption_Operation : public PK_Ops::Decryption_with_EME
+class ElGamal_Decryption_Operation final : public PK_Ops::Decryption_with_EME
    {
    public:
 

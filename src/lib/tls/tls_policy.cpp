@@ -11,6 +11,8 @@
 #include <botan/tls_magic.h>
 #include <botan/tls_exceptn.h>
 #include <botan/internal/stl_util.h>
+#include <botan/pk_keys.h>
+#include <sstream>
 
 namespace Botan {
 
@@ -91,6 +93,11 @@ std::vector<std::string> Policy::allowed_signature_methods() const
 bool Policy::allowed_signature_method(const std::string& sig_method) const
    {
    return value_exists(allowed_signature_methods(), sig_method);
+   }
+
+bool Policy::allowed_signature_hash(const std::string& sig_hash) const
+   {
+   return value_exists(allowed_signature_hashes(), sig_hash);
    }
 
 std::vector<std::string> Policy::allowed_ecc_curves() const
@@ -256,9 +263,23 @@ bool Policy::acceptable_protocol_version(Protocol_Version version) const
 Protocol_Version Policy::latest_supported_version(bool datagram) const
    {
    if(datagram)
-      return Protocol_Version::latest_dtls_version();
+      {
+      if(allow_dtls12())
+         return Protocol_Version::DTLS_V12;
+      if(allow_dtls10())
+         return Protocol_Version::DTLS_V10;
+      throw Invalid_State("Policy forbids all available DTLS version");
+      }
    else
-      return Protocol_Version::latest_tls_version();
+      {
+      if(allow_tls12())
+         return Protocol_Version::TLS_V12;
+      if(allow_tls11())
+         return Protocol_Version::TLS_V11;
+      if(allow_tls10())
+         return Protocol_Version::TLS_V10;
+      throw Invalid_State("Policy forbids all available TLS version");
+      }
    }
 
 bool Policy::acceptable_ciphersuite(const Ciphersuite&) const
@@ -266,6 +287,7 @@ bool Policy::acceptable_ciphersuite(const Ciphersuite&) const
    return true;
    }
 
+bool Policy::allow_client_initiated_renegotiation() const { return false; }
 bool Policy::allow_server_initiated_renegotiation() const { return false; }
 bool Policy::allow_insecure_renegotiation() const { return false; }
 bool Policy::allow_tls10()  const { return true; }
@@ -295,7 +317,7 @@ std::vector<uint16_t> Policy::srtp_profiles() const
 
 namespace {
 
-class Ciphersuite_Preference_Ordering
+class Ciphersuite_Preference_Ordering final
    {
    public:
       Ciphersuite_Preference_Ordering(const std::vector<std::string>& ciphers,

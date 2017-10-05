@@ -7,6 +7,8 @@
 
 #include <botan/oaep.h>
 #include <botan/mgf1.h>
+#include <botan/exceptn.h>
+#include <botan/rng.h>
 #include <botan/internal/ct_utils.h>
 
 namespace Botan {
@@ -106,7 +108,7 @@ secure_vector<uint8_t> OAEP::unpad(uint8_t& valid_mask,
 
    // If we never saw any non-zero byte, then it's not valid input
    bad_input |= waiting_for_delim;
-   bad_input |= CT::is_equal<uint8_t>(same_mem(&input[hlen], m_Phash.data(), hlen), false);
+   bad_input |= CT::is_equal<uint8_t>(constant_time_compare(&input[hlen], m_Phash.data(), hlen), false);
 
    CT::unpoison(input.data(), input.size());
    CT::unpoison(&bad_input, 1);

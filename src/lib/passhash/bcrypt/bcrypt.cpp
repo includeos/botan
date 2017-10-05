@@ -6,9 +6,10 @@
 */
 
 #include <botan/bcrypt.h>
-#include <botan/loadstor.h>
+#include <botan/rng.h>
 #include <botan/blowfish.h>
 #include <botan/base64.h>
+#include <botan/parsing.h>
 
 namespace Botan {
 
@@ -90,21 +91,21 @@ std::string make_bcrypt(const std::string& pass,
                         const std::vector<uint8_t>& salt,
                         uint16_t work_factor)
    {
-   auto magic = std::vector<uint8_t>{
+   static const uint8_t BCRYPT_MAGIC[8*3] = {
       0x4F, 0x72, 0x70, 0x68, 0x65, 0x61, 0x6E, 0x42,
       0x65, 0x68, 0x6F, 0x6C, 0x64, 0x65, 0x72, 0x53,
       0x63, 0x72, 0x79, 0x44, 0x6F, 0x75, 0x62, 0x74
    };
 
-   std::vector<uint8_t> ctext = magic;
-
    Blowfish blowfish;
 
-   // Include the trailing NULL byte
-   blowfish.eks_key_schedule(reinterpret_cast<const uint8_t*>(pass.c_str()),
+   // Include the trailing NULL byte, so we need c_str() not data()
+   blowfish.eks_key_schedule(cast_char_ptr_to_uint8(pass.c_str()),
                              pass.length() + 1,
                              salt.data(),
                              work_factor);
+
+   std::vector<uint8_t> ctext(BCRYPT_MAGIC, BCRYPT_MAGIC + 8*3);
 
    for(size_t i = 0; i != 64; ++i)
       blowfish.encrypt_n(ctext.data(), ctext.data(), 3);
@@ -138,7 +139,7 @@ bool check_bcrypt(const std::string& pass, const std::string& hash)
       return false;
       }
 
-   const uint16_t workfactor = to_u32bit(hash.substr(4, 2));
+   const uint16_t workfactor = to_uint16(hash.substr(4, 2));
 
    const std::vector<uint8_t> salt = bcrypt_base64_decode(hash.substr(7, 22));
    if(salt.size() != 16)

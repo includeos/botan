@@ -9,6 +9,7 @@ amd64
 x86-64
 em64t
 x64
+x86_amd64
 </aliases>
 
 <submodels>
@@ -37,15 +38,14 @@ athlon64 -> k8
 </submodel_aliases>
 
 <isa_extensions>
-sse2
-ssse3
-sse4.1
-sse4.2
-avx2
 aesni
+avx2
+bmi2
 rdrand
 rdseed
 sha
-bmi2
-sha
+sse2
+sse4.1
+sse4.2
+ssse3
 </isa_extensions>

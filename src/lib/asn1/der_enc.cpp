@@ -9,7 +9,6 @@
 #include <botan/asn1_obj.h>
 #include <botan/bigint.h>
 #include <botan/loadstor.h>
-#include <botan/parsing.h>
 #include <botan/internal/bit_ops.h>
 #include <algorithm>
 
@@ -36,7 +35,7 @@ secure_vector<uint8_t> encode_tag(ASN1_Tag type_tag, ASN1_Tag class_tag)
 
       BOTAN_ASSERT(blocks > 0, "Math works");
 
-      encoded_tag.push_back(class_tag | 0x1F);
+      encoded_tag.push_back(static_cast<uint8_t>(class_tag | 0x1F));
       for(size_t i = 0; i != blocks - 1; ++i)
          encoded_tag.push_back(0x80 | ((type_tag >> 7*(blocks-i-1)) & 0x7F));
       encoded_tag.push_back(type_tag & 0x7F);
@@ -395,7 +394,7 @@ DER_Encoder& DER_Encoder::add_object(ASN1_Tag type_tag, ASN1_Tag class_tag,
 DER_Encoder& DER_Encoder::add_object(ASN1_Tag type_tag, ASN1_Tag class_tag,
                                      const std::string& rep_str)
    {
-   const uint8_t* rep = reinterpret_cast<const uint8_t*>(rep_str.data());
+   const uint8_t* rep = cast_char_ptr_to_uint8(rep_str.data());
    const size_t rep_len = rep_str.size();
    return add_object(type_tag, class_tag, rep, rep_len);
    }

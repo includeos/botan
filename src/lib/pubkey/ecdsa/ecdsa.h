@@ -7,8 +7,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_ECDSA_KEY_H__
-#define BOTAN_ECDSA_KEY_H__
+#ifndef BOTAN_ECDSA_KEY_H_
+#define BOTAN_ECDSA_KEY_H_
 
 #include <botan/ecc_key.h>
 
@@ -17,7 +17,7 @@ namespace Botan {
 /**
 * This class represents ECDSA Public Keys.
 */
-class BOTAN_DLL ECDSA_PublicKey : public virtual EC_PublicKey
+class BOTAN_PUBLIC_API(2,0) ECDSA_PublicKey : public virtual EC_PublicKey
    {
    public:
 
@@ -60,7 +60,7 @@ class BOTAN_DLL ECDSA_PublicKey : public virtual EC_PublicKey
 /**
 * This class represents ECDSA Private Keys
 */
-class BOTAN_DLL ECDSA_PrivateKey : public ECDSA_PublicKey,
+class BOTAN_PUBLIC_API(2,0) ECDSA_PrivateKey final : public ECDSA_PublicKey,
                                    public EC_PrivateKey
    {
    public:

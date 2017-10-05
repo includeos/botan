@@ -7,8 +7,6 @@
 #include "tests.h"
 
 #if defined(BOTAN_HAS_ECDSA)
-   #include "test_pubkey.h"
-   #include <botan/pubkey.h>
    #include <botan/ecdsa.h>
    #include <botan/oids.h>
 #endif
@@ -18,7 +16,7 @@ namespace Botan_Tests {
 namespace {
 
 #if defined(BOTAN_HAS_ECDSA)
-class ECC_Pointmult_Tests : public Text_Based_Test
+class ECC_Pointmult_Tests final : public Text_Based_Test
    {
    public:
       ECC_Pointmult_Tests() : Text_Based_Test("pubkey/ecc.vec", "m,X,Y") {}

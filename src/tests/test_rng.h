@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_TESTS_FIXED_RNG_H__
-#define BOTAN_TESTS_FIXED_RNG_H__
+#ifndef BOTAN_TESTS_FIXED_RNG_H_
+#define BOTAN_TESTS_FIXED_RNG_H_
 
 #include "tests.h"
 #include <deque>
@@ -27,18 +27,6 @@ class Fixed_Output_RNG : public Botan::RandomNumberGenerator
       bool is_seeded() const override
          {
          return !m_buf.empty();
-         }
-
-      virtual uint8_t random()
-         {
-         if(!is_seeded())
-            {
-            throw Test_Error("Fixed output RNG ran out of bytes, test bug?");
-            }
-
-         uint8_t out = m_buf.front();
-         m_buf.pop_front();
-         return out;
          }
 
       size_t reseed(Botan::Entropy_Sources&,
@@ -81,27 +69,7 @@ class Fixed_Output_RNG : public Botan::RandomNumberGenerator
 
       Fixed_Output_RNG() = default;
    protected:
-      size_t remaining() const
-         {
-         return m_buf.size();
-         }
-
-      std::deque<uint8_t> m_buf;
-   };
-
-/**
- * RNG that outputs a given set of fixed bytes for a specific request count, outputs random otherwise.
- * Useful for test vectors with fixed nonces, where the algorithm consumes more random than just the fixed nonce.
- */
-class Fixed_Output_Position_RNG : public Fixed_Output_RNG
-   {
-   public:
-      bool is_seeded() const override
-         {
-         return !m_buf.empty() || Test::rng().is_seeded();
-         }
-
-      uint8_t random() override
+      uint8_t random()
          {
          if(m_buf.empty())
             {
@@ -111,6 +79,22 @@ class Fixed_Output_Position_RNG : public Fixed_Output_RNG
          uint8_t out = m_buf.front();
          m_buf.pop_front();
          return out;
+         }
+
+   private:
+      std::deque<uint8_t> m_buf;
+   };
+
+/**
+ * RNG that outputs a given set of fixed bytes for a specific request count, outputs random otherwise.
+ * Useful for test vectors with fixed nonces, where the algorithm consumes more random than just the fixed nonce.
+ */
+class Fixed_Output_Position_RNG final : public Fixed_Output_RNG
+   {
+   public:
+      bool is_seeded() const override
+         {
+         return Fixed_Output_RNG::is_seeded() || Test::rng().is_seeded();
          }
 
       void randomize(uint8_t out[], size_t len) override
@@ -142,20 +126,20 @@ class Fixed_Output_Position_RNG : public Fixed_Output_RNG
          return "Fixed_Output_Position_RNG";
          }
 
-      explicit Fixed_Output_Position_RNG(const std::vector<uint8_t>& in, uint32_t pos)
+      explicit Fixed_Output_Position_RNG(const std::vector<uint8_t>& in, size_t pos)
          : Fixed_Output_RNG(in)
          , m_pos(pos) {}
 
-      explicit Fixed_Output_Position_RNG(const std::string& in_str, uint32_t pos)
+      explicit Fixed_Output_Position_RNG(const std::string& in_str, size_t pos)
          : Fixed_Output_RNG(in_str)
          , m_pos(pos) {}
 
    private:
-      uint32_t m_pos = 0;
-      uint32_t m_requests = 0;
+      size_t m_pos = 0;
+      size_t m_requests = 0;
    };
 
-class SeedCapturing_RNG : public Botan::RandomNumberGenerator
+class SeedCapturing_RNG final : public Botan::RandomNumberGenerator
    {
    public:
       void randomize(uint8_t[], size_t) override
@@ -192,6 +176,47 @@ class SeedCapturing_RNG : public Botan::RandomNumberGenerator
    private:
       std::vector<uint8_t> m_seed;
       size_t m_samples = 0;
+   };
+
+/*
+* RNG that counts the number of requests made to it, for example
+* to verify that a reseed attempt was made at the expected time.
+*/
+class Request_Counting_RNG final : public Botan::RandomNumberGenerator
+   {
+   public:
+      Request_Counting_RNG() : m_randomize_count(0) {}
+
+      size_t randomize_count() const
+         {
+         return m_randomize_count;
+         }
+
+      bool is_seeded() const override
+         {
+         return true;
+         }
+
+      void clear() override
+         {
+         m_randomize_count = 0;
+         }
+
+      void randomize(uint8_t out[], size_t out_len) override
+         {
+         std::memset(out, 0x80, out_len);
+         m_randomize_count++;
+         }
+
+      void add_entropy(const uint8_t[], size_t) override {}
+
+      std::string name() const override
+         {
+         return "Request_Counting_RNG";
+         }
+
+   private:
+      size_t m_randomize_count;
    };
 
 }

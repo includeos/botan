@@ -54,7 +54,7 @@ class Compress final : public Command
             }
 
          const std::string in_file = get_arg("file");
-         std::ifstream in(in_file);
+         std::ifstream in(in_file, std::ios::binary);
 
          if(!in.good())
             {
@@ -62,7 +62,7 @@ class Compress final : public Command
             }
 
          const std::string out_file = output_filename(in_file, comp_type);
-         std::ofstream out(out_file);
+         std::ofstream out(out_file, std::ios::binary);
          if(!in.good())
             {
             throw CLI_IO_Error("writing", out_file);
@@ -118,7 +118,7 @@ class Decompress final : public Command
          std::string out_file, suffix;
          parse_extension(in_file, out_file, suffix);
 
-         std::ifstream in(in_file);
+         std::ifstream in(in_file, std::ios::binary);
 
          if(!in.good())
             {
@@ -134,7 +134,7 @@ class Decompress final : public Command
             throw CLI_Error_Unsupported("Decompression", suffix);
             }
 
-         std::ofstream out(out_file);
+         std::ofstream out(out_file, std::ios::binary);
          if(!out.good())
             {
             throw CLI_IO_Error("writing", out_file);

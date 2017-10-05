@@ -12,6 +12,10 @@
   #include <botan/aes.h>
 #endif
 
+#if defined(BOTAN_HAS_ARIA)
+  #include <botan/aria.h>
+#endif
+
 #if defined(BOTAN_HAS_BLOWFISH)
   #include <botan/blowfish.h>
 #endif
@@ -64,6 +68,14 @@
 
 #if defined(BOTAN_HAS_SERPENT)
   #include <botan/serpent.h>
+#endif
+
+#if defined(BOTAN_HAS_SHACAL2)
+  #include <botan/shacal2.h>
+#endif
+
+#if defined(BOTAN_HAS_SM4)
+  #include <botan/sm4.h>
 #endif
 
 #if defined(BOTAN_HAS_TWOFISH)
@@ -124,10 +136,34 @@ BlockCipher::create(const std::string& algo,
       }
 #endif
 
+#if defined(BOTAN_HAS_ARIA)
+   if(algo == "ARIA-128")
+      {
+      return std::unique_ptr<BlockCipher>(new ARIA_128);
+      }
+
+   if(algo == "ARIA-192")
+      {
+      return std::unique_ptr<BlockCipher>(new ARIA_192);
+      }
+
+   if(algo == "ARIA-256")
+      {
+      return std::unique_ptr<BlockCipher>(new ARIA_256);
+      }
+#endif
+
 #if defined(BOTAN_HAS_SERPENT)
    if(algo == "Serpent")
       {
       return std::unique_ptr<BlockCipher>(new Serpent);
+      }
+#endif
+
+#if defined(BOTAN_HAS_SHACAL2)
+   if(algo == "SHACAL2")
+      {
+      return std::unique_ptr<BlockCipher>(new SHACAL2);
       }
 #endif
 
@@ -230,6 +266,13 @@ BlockCipher::create(const std::string& algo,
    if(algo == "SEED")
       {
       return std::unique_ptr<BlockCipher>(new SEED);
+      }
+#endif
+
+#if defined(BOTAN_HAS_SM4)
+   if(algo == "SM4")
+      {
+      return std::unique_ptr<BlockCipher>(new SM4);
       }
 #endif
 

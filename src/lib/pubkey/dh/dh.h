@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_DIFFIE_HELLMAN_H__
-#define BOTAN_DIFFIE_HELLMAN_H__
+#ifndef BOTAN_DIFFIE_HELLMAN_H_
+#define BOTAN_DIFFIE_HELLMAN_H_
 
 #include <botan/dl_algo.h>
 
@@ -15,7 +15,7 @@ namespace Botan {
 /**
 * This class represents Diffie-Hellman public keys.
 */
-class BOTAN_DLL DH_PublicKey : public virtual DL_Scheme_PublicKey
+class BOTAN_PUBLIC_API(2,0) DH_PublicKey : public virtual DL_Scheme_PublicKey
    {
    public:
       std::string algo_name() const override { return "DH"; }
@@ -46,7 +46,7 @@ class BOTAN_DLL DH_PublicKey : public virtual DL_Scheme_PublicKey
 /**
 * This class represents Diffie-Hellman private keys.
 */
-class BOTAN_DLL DH_PrivateKey : public DH_PublicKey,
+class BOTAN_PUBLIC_API(2,0) DH_PrivateKey final : public DH_PublicKey,
                                 public PK_Key_Agreement_Key,
                                 public virtual DL_Scheme_PrivateKey
    {

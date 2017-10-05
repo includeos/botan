@@ -18,7 +18,7 @@ namespace {
 
 #if defined(BOTAN_HAS_RSA)
 
-class RSA_ES_KAT_Tests : public PK_Encryption_Decryption_Test
+class RSA_ES_KAT_Tests final : public PK_Encryption_Decryption_Test
    {
    public:
       RSA_ES_KAT_Tests()
@@ -39,7 +39,7 @@ class RSA_ES_KAT_Tests : public PK_Encryption_Decryption_Test
          }
    };
 
-class RSA_KEM_Tests : public PK_KEM_Test
+class RSA_KEM_Tests final : public PK_KEM_Test
    {
    public:
       RSA_KEM_Tests()
@@ -60,7 +60,7 @@ class RSA_KEM_Tests : public PK_KEM_Test
 
    };
 
-class RSA_Signature_KAT_Tests : public PK_Signature_Generation_Test
+class RSA_Signature_KAT_Tests final : public PK_Signature_Generation_Test
    {
    public:
       RSA_Signature_KAT_Tests()
@@ -86,7 +86,73 @@ class RSA_Signature_KAT_Tests : public PK_Signature_Generation_Test
          }
    };
 
-class RSA_Signature_Verify_Tests : public PK_Signature_Verification_Test
+class RSA_PSS_KAT_Tests final : public PK_Signature_Generation_Test
+   {
+   public:
+      RSA_PSS_KAT_Tests()
+         : PK_Signature_Generation_Test(
+              "RSA",
+              "pubkey/rsa_pss.vec",
+              "P,Q,E,Hash,Nonce,Msg,Signature",
+              "") {}
+
+      std::string default_padding(const VarMap& var) const override
+         {
+         const std::string hash_name = get_req_str(var, "Hash");
+         const size_t salt_size = get_req_bin(var, "Nonce").size();
+         return "PSSR(" + hash_name + ",MGF1," + std::to_string(salt_size) + ")";
+         }
+
+      bool clear_between_callbacks() const override
+         {
+         return false;
+         }
+
+      std::unique_ptr<Botan::Private_Key> load_private_key(const VarMap& vars) override
+         {
+         const BigInt p = get_req_bn(vars, "P");
+         const BigInt q = get_req_bn(vars, "Q");
+         const BigInt e = get_req_bn(vars, "E");
+
+         std::unique_ptr<Botan::Private_Key> key(new Botan::RSA_PrivateKey(p, q, e));
+         return key;
+         }
+   };
+
+class RSA_PSS_Raw_KAT_Tests final : public PK_Signature_Generation_Test
+   {
+   public:
+      RSA_PSS_Raw_KAT_Tests()
+         : PK_Signature_Generation_Test(
+              "RSA",
+              "pubkey/rsa_pss_raw.vec",
+              "P,Q,E,Hash,Nonce,Msg,Signature",
+              "") {}
+
+      std::string default_padding(const VarMap& var) const override
+         {
+         const std::string hash_name = get_req_str(var, "Hash");
+         const size_t salt_size = get_req_bin(var, "Nonce").size();
+         return "PSSR_Raw(" + hash_name + ",MGF1," + std::to_string(salt_size) + ")";
+         }
+
+      bool clear_between_callbacks() const override
+         {
+         return false;
+         }
+
+      std::unique_ptr<Botan::Private_Key> load_private_key(const VarMap& vars) override
+         {
+         const BigInt p = get_req_bn(vars, "P");
+         const BigInt q = get_req_bn(vars, "Q");
+         const BigInt e = get_req_bn(vars, "E");
+
+         std::unique_ptr<Botan::Private_Key> key(new Botan::RSA_PrivateKey(p, q, e));
+         return key;
+         }
+   };
+
+class RSA_Signature_Verify_Tests final : public PK_Signature_Verification_Test
    {
    public:
       RSA_Signature_Verify_Tests()
@@ -111,7 +177,7 @@ class RSA_Signature_Verify_Tests : public PK_Signature_Verification_Test
          }
    };
 
-class RSA_Signature_Verify_Invalid_Tests : public PK_Signature_NonVerification_Test
+class RSA_Signature_Verify_Invalid_Tests final : public PK_Signature_NonVerification_Test
    {
    public:
       RSA_Signature_Verify_Invalid_Tests()
@@ -134,7 +200,7 @@ class RSA_Signature_Verify_Invalid_Tests : public PK_Signature_NonVerification_T
          }
    };
 
-class RSA_Keygen_Tests : public PK_Key_Generation_Test
+class RSA_Keygen_Tests final : public PK_Key_Generation_Test
    {
    public:
       std::vector<std::string> keygen_params() const override
@@ -147,7 +213,7 @@ class RSA_Keygen_Tests : public PK_Key_Generation_Test
          }
    };
 
-class RSA_Blinding_Tests : public Test
+class RSA_Blinding_Tests final : public Test
    {
    public:
       std::vector<Test::Result> run() override
@@ -236,6 +302,8 @@ class RSA_Blinding_Tests : public Test
 
 BOTAN_REGISTER_TEST("rsa_encrypt", RSA_ES_KAT_Tests);
 BOTAN_REGISTER_TEST("rsa_sign", RSA_Signature_KAT_Tests);
+BOTAN_REGISTER_TEST("rsa_pss", RSA_PSS_KAT_Tests);
+BOTAN_REGISTER_TEST("rsa_pss_raw", RSA_PSS_Raw_KAT_Tests);
 BOTAN_REGISTER_TEST("rsa_verify", RSA_Signature_Verify_Tests);
 BOTAN_REGISTER_TEST("rsa_verify_invalid", RSA_Signature_Verify_Invalid_Tests);
 BOTAN_REGISTER_TEST("rsa_kem", RSA_KEM_Tests);

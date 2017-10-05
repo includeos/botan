@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_ASN1_ATTRIBUTE_H__
-#define BOTAN_ASN1_ATTRIBUTE_H__
+#ifndef BOTAN_ASN1_ATTRIBUTE_H_
+#define BOTAN_ASN1_ATTRIBUTE_H_
 
 #include <botan/asn1_obj.h>
 #include <botan/asn1_oid.h>
@@ -17,7 +17,7 @@ namespace Botan {
 /**
 * Attribute
 */
-class BOTAN_DLL Attribute final : public ASN1_Object
+class BOTAN_PUBLIC_API(2,0) Attribute final : public ASN1_Object
    {
    public:
       void encode_into(class DER_Encoder& to) const override;

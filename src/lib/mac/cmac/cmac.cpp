@@ -6,6 +6,7 @@
 */
 
 #include <botan/cmac.h>
+#include <botan/internal/poly_dbl.h>
 
 namespace Botan {
 
@@ -14,41 +15,8 @@ namespace Botan {
 */
 secure_vector<uint8_t> CMAC::poly_double(const secure_vector<uint8_t>& in)
    {
-   const bool top_carry = static_cast<bool>((in[0] & 0x80) != 0);
-
-   secure_vector<uint8_t> out = in;
-
-   uint8_t carry = 0;
-   for(size_t i = out.size(); i != 0; --i)
-      {
-      uint8_t temp = out[i-1];
-      out[i-1] = (temp << 1) | carry;
-      carry = (temp >> 7);
-      }
-
-   if(top_carry)
-      {
-      switch(in.size())
-         {
-         case 8:
-            out[out.size()-1] ^= 0x1B;
-            break;
-         case 16:
-            out[out.size()-1] ^= 0x87;
-            break;
-         case 32:
-            out[out.size()-2] ^= 0x4;
-            out[out.size()-1] ^= 0x25;
-            break;
-         case 64:
-            out[out.size()-2] ^= 0x1;
-            out[out.size()-1] ^= 0x25;
-            break;
-         default:
-            throw Exception("Unsupported CMAC size " + std::to_string(in.size()));
-         }
-      }
-
+   secure_vector<uint8_t> out(in.size());
+   poly_double_n(out.data(), in.data(), out.size());
    return out;
    }
 
@@ -112,8 +80,8 @@ void CMAC::key_schedule(const uint8_t key[], size_t length)
    clear();
    m_cipher->set_key(key, length);
    m_cipher->encrypt(m_B);
-   m_B = poly_double(m_B);
-   m_P = poly_double(m_B);
+   poly_double_n(m_B.data(), m_B.size());
+   poly_double_n(m_P.data(), m_B.data(), m_P.size());
    }
 
 /*
@@ -148,13 +116,15 @@ MessageAuthenticationCode* CMAC::clone() const
 /*
 * CMAC Constructor
 */
-CMAC::CMAC(BlockCipher* cipher) : m_cipher(cipher)
+CMAC::CMAC(BlockCipher* cipher) :
+   m_cipher(cipher),
+   m_block_size(m_cipher->block_size())
    {
-   if(m_cipher->block_size() !=  8 && m_cipher->block_size() != 16 &&
-      m_cipher->block_size() != 32 && m_cipher->block_size() != 64)
+   if(m_block_size !=  8 && m_block_size != 16 &&
+      m_block_size != 32 && m_block_size != 64)
       {
       throw Invalid_Argument("CMAC cannot use the " +
-                             std::to_string(m_cipher->block_size() * 8) +
+                             std::to_string(m_block_size * 8) +
                              " bit cipher " + m_cipher->name());
       }
 

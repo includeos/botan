@@ -6,16 +6,14 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_P11_X509_H__
-#define BOTAN_P11_X509_H__
-
-#include <botan/build.h>
-#if defined(BOTAN_HAS_X509_CERTIFICATES)
+#ifndef BOTAN_P11_X509_H_
+#define BOTAN_P11_X509_H_
 
 #include <botan/p11_object.h>
 
-#include <botan/x509cert.h>
+#if defined(BOTAN_HAS_X509_CERTIFICATES)
 
+#include <botan/x509cert.h>
 #include <vector>
 
 namespace Botan {
@@ -24,7 +22,7 @@ namespace PKCS11 {
 class Session;
 
 /// Common attributes of all PKCS#11 X509 certificates
-class BOTAN_DLL X509_CertificateProperties final : public CertificateProperties
+class BOTAN_PUBLIC_API(2,0) X509_CertificateProperties final : public CertificateProperties
    {
    public:
       /**
@@ -87,7 +85,7 @@ class BOTAN_DLL X509_CertificateProperties final : public CertificateProperties
    };
 
 /// Represents a PKCS#11 X509 certificate
-class BOTAN_DLL PKCS11_X509_Certificate final : public Object, public X509_Certificate
+class BOTAN_PUBLIC_API(2,0) PKCS11_X509_Certificate final : public Object, public X509_Certificate
    {
    public:
       static const ObjectClass Class = ObjectClass::Certificate;

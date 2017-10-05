@@ -147,7 +147,7 @@ void bigint_add2(word x[], size_t x_size, const word y[], size_t y_size)
 void bigint_add3(word z[], const word x[], size_t x_size,
                            const word y[], size_t y_size)
    {
-   z[(x_size > y_size ? x_size : y_size)] +=
+   z[x_size > y_size ? x_size : y_size] +=
       bigint_add3_nc(z, x, x_size, y, y_size);
    }
 
@@ -406,6 +406,10 @@ word bigint_divop(word n1, word n0, word d)
    if(d == 0)
       throw Invalid_Argument("bigint_divop divide by zero");
 
+#if defined(BOTAN_HAS_MP_DWORD)
+   return ((static_cast<dword>(n1) << MP_WORD_BITS) | n0) / d;
+#else
+
    word high = n1 % d, quotient = 0;
 
    for(size_t i = 0; i != MP_WORD_BITS; ++i)
@@ -424,6 +428,7 @@ word bigint_divop(word n1, word n0, word d)
       }
 
    return quotient;
+#endif
    }
 
 /*

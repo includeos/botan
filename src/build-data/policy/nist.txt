@@ -20,7 +20,10 @@ gmac
 
 # kdf
 sp800_108
+sp800_56a
 sp800_56c
+
+shake
 
 # pk_pad
 eme_oaep
@@ -47,11 +50,17 @@ rfc3394
 aes_ni
 aes_ssse3
 
+# hash
+sha1_sse2
+sha1_x86
+sha1_armv8
+sha2_32_x86
+sha2_32_armv8
+
 # modes
 clmul
 
 # entropy sources
-cryptoapi_rng
 darwin_secrandom
 dev_random
 proc_walk
@@ -64,12 +73,14 @@ rdrand_rng
 system_rng
 
 # utils
+http_util # needed by x509 for OCSP online checks
 locking_allocator
 simd
 </if_available>
 
 <prohibited>
 # block
+aria
 blowfish
 camellia
 cascade
@@ -85,6 +96,10 @@ noekeon_simd
 seed
 serpent
 serpent_simd
+sm4
+shacal2
+shacal2_x86
+shacal2_simd
 threefish
 threefish_avx2
 twofish
@@ -100,6 +115,7 @@ cfb
 # stream
 chacha
 chacha_sse2
+shake_cipher
 ofb
 rc4
 salsa20
@@ -112,6 +128,7 @@ prf_x942
 
 # pubkey
 curve25519
+ed25519
 ecgdsa
 eckcdsa
 elgamal
@@ -122,6 +139,7 @@ rfc6979
 newhope
 cecpq1
 xmss
+sm2
 
 # pk_pad
 #eme_pkcs1 // needed for tls
@@ -140,8 +158,12 @@ rmd160
 #sha1_sse2 // needed for tls
 skein
 sm3
+streebog
 tiger
 whirlpool
+
+# rng
+chacha_rng
 
 # mac
 cbc_mac

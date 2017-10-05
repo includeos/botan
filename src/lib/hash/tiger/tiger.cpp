@@ -7,9 +7,13 @@
 
 #include <botan/tiger.h>
 #include <botan/exceptn.h>
-#include <botan/parsing.h>
 
 namespace Botan {
+
+std::unique_ptr<HashFunction> Tiger::copy_state() const
+   {
+   return std::unique_ptr<HashFunction>(new Tiger(*this));
+   }
 
 namespace {
 

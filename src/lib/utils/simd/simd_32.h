@@ -5,8 +5,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
-#ifndef BOTAN_SIMD_32_H__
-#define BOTAN_SIMD_32_H__
+#ifndef BOTAN_SIMD_32_H_
+#define BOTAN_SIMD_32_H_
 
 #include <botan/types.h>
 #include <botan/loadstor.h>
@@ -58,13 +58,16 @@ class SIMD_4x32 final
       SIMD_4x32() // zero initialized
          {
 #if defined(BOTAN_SIMD_USE_SSE2)
-         ::memset(&m_sse, 0, sizeof(m_sse));
+         m_sse = _mm_setzero_si128();
 #elif defined(BOTAN_SIMD_USE_ALTIVEC)
          m_vmx = vec_splat_u32(0);
 #elif defined(BOTAN_SIMD_USE_NEON)
          m_neon = vdupq_n_u32(0);
 #else
-         ::memset(m_scalar, 0, sizeof(m_scalar));
+         m_scalar[0] = 0;
+         m_scalar[1] = 0;
+         m_scalar[2] = 0;
+         m_scalar[3] = 0;
 #endif
          }
 
@@ -214,18 +217,12 @@ class SIMD_4x32 final
 
 #elif defined(BOTAN_SIMD_USE_ALTIVEC)
 
-         __vector unsigned char perm = vec_lvsl(0, static_cast<uint32_t*>(nullptr));
-         if(CPUID::is_big_endian())
-            {
-            perm = vec_xor(perm, vec_splat_u8(3)); // bswap vector
-            }
-
          union {
             __vector unsigned int V;
             uint32_t R[4];
             } vec;
-         vec.V = vec_perm(m_vmx, m_vmx, perm);
-         Botan::store_be(out, vec.R[0], vec.R[1], vec.R[2], vec.R[3]);
+         vec.V = m_vmx;
+         Botan::store_le(out, vec.R[0], vec.R[1], vec.R[2], vec.R[3]);
 
 #elif defined(BOTAN_SIMD_USE_NEON)
 
@@ -280,6 +277,64 @@ class SIMD_4x32 final
 #else
          Botan::store_be(out, m_scalar[0], m_scalar[1], m_scalar[2], m_scalar[3]);
 #endif
+         }
+
+
+      /*
+      Return rotate_right(x, rot1) ^ rotate_right(x, rot2) ^ rotate_right(x, rot3)
+      */
+      SIMD_4x32 rho(size_t rot1, size_t rot2, size_t rot3) const
+         {
+         SIMD_4x32 res;
+
+#if defined(BOTAN_SIMD_USE_SSE2)
+
+         res.m_sse = _mm_or_si128(_mm_slli_epi32(m_sse, static_cast<int>(32-rot1)),
+                                  _mm_srli_epi32(m_sse, static_cast<int>(rot1)));
+         res.m_sse = _mm_xor_si128(
+            res.m_sse,
+            _mm_or_si128(_mm_slli_epi32(m_sse, static_cast<int>(32-rot2)),
+                         _mm_srli_epi32(m_sse, static_cast<int>(rot2))));
+         res.m_sse = _mm_xor_si128(
+            res.m_sse,
+            _mm_or_si128(_mm_slli_epi32(m_sse, static_cast<int>(32-rot3)),
+                         _mm_srli_epi32(m_sse, static_cast<int>(rot3))));
+
+#elif defined(BOTAN_SIMD_USE_ALTIVEC)
+
+         const unsigned int r1 = static_cast<unsigned int>(32-rot1);
+         const unsigned int r2 = static_cast<unsigned int>(32-rot2);
+         const unsigned int r3 = static_cast<unsigned int>(32-rot3);
+         res.m_vmx = vec_rl(m_vmx, (__vector unsigned int){r1, r1, r1, r1});
+         res.m_vmx = vec_xor(res.m_vmx, vec_rl(m_vmx, (__vector unsigned int){r2, r2, r2, r2}));
+         res.m_vmx = vec_xor(res.m_vmx, vec_rl(m_vmx, (__vector unsigned int){r3, r3, r3, r3}));
+
+#elif defined(BOTAN_SIMD_USE_NEON)
+         res.m_neon = vorrq_u32(vshlq_n_u32(m_neon, static_cast<int>(32-rot1)),
+                                vshrq_n_u32(m_neon, static_cast<int>(rot1)));
+
+         res.m_neon = veorq_u32(
+            res.m_neon,
+            vorrq_u32(vshlq_n_u32(m_neon, static_cast<int>(32-rot2)),
+                      vshrq_n_u32(m_neon, static_cast<int>(rot2))));
+
+         res.m_neon = veorq_u32(
+            res.m_neon,
+            vorrq_u32(vshlq_n_u32(m_neon, static_cast<int>(32-rot3)),
+                      vshrq_n_u32(m_neon, static_cast<int>(rot3))));
+
+#else
+
+         for(size_t i = 0; i != 4; ++i)
+            {
+            res.m_scalar[i] =
+               Botan::rotate_right(m_scalar[i], rot1) ^
+               Botan::rotate_right(m_scalar[i], rot2) ^
+               Botan::rotate_right(m_scalar[i], rot3);
+            }
+#endif
+
+         return res;
          }
 
       /**

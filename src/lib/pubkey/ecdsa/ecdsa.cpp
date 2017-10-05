@@ -18,6 +18,10 @@
   #include <botan/rfc6979.h>
 #endif
 
+#if defined(BOTAN_HAS_BEARSSL)
+  #include <botan/internal/bearssl.h>
+#endif
+
 #if defined(BOTAN_HAS_OPENSSL)
   #include <botan/internal/openssl.h>
 #endif
@@ -41,7 +45,7 @@ namespace {
 /**
 * ECDSA signature operation
 */
-class ECDSA_Signature_Operation : public PK_Ops::Signature_with_EMSA
+class ECDSA_Signature_Operation final : public PK_Ops::Signature_with_EMSA
    {
    public:
 
@@ -51,9 +55,11 @@ class ECDSA_Signature_Operation : public PK_Ops::Signature_with_EMSA
          m_order(ecdsa.domain().get_order()),
          m_base_point(ecdsa.domain().get_base_point(), m_order),
          m_x(ecdsa.private_value()),
-         m_mod_order(m_order),
-         m_emsa(emsa)
+         m_mod_order(m_order)
          {
+#if defined(BOTAN_HAS_RFC6979_GENERATOR)
+         m_rfc6979_hash = hash_for_emsa(emsa);
+#endif
          }
 
       size_t max_input_bits() const override { return m_order.bits(); }
@@ -66,7 +72,9 @@ class ECDSA_Signature_Operation : public PK_Ops::Signature_with_EMSA
       Blinded_Point_Multiply m_base_point;
       const BigInt& m_x;
       Modular_Reducer m_mod_order;
-      std::string m_emsa;
+#if defined(BOTAN_HAS_RFC6979_GENERATOR)
+      std::string m_rfc6979_hash;
+#endif
    };
 
 secure_vector<uint8_t>
@@ -76,7 +84,7 @@ ECDSA_Signature_Operation::raw_sign(const uint8_t msg[], size_t msg_len,
    const BigInt m(msg, msg_len);
 
 #if defined(BOTAN_HAS_RFC6979_GENERATOR)
-   const BigInt k = generate_rfc6979_nonce(m_x, m_order, m, hash_for_emsa(m_emsa));
+   const BigInt k = generate_rfc6979_nonce(m_x, m_order, m, m_rfc6979_hash);
 #else
    const BigInt k = BigInt::random_integer(rng, 1, m_order);
 #endif
@@ -95,7 +103,7 @@ ECDSA_Signature_Operation::raw_sign(const uint8_t msg[], size_t msg_len,
 /**
 * ECDSA verification operation
 */
-class ECDSA_Verification_Operation : public PK_Ops::Verification_with_EMSA
+class ECDSA_Verification_Operation final : public PK_Ops::Verification_with_EMSA
    {
    public:
       ECDSA_Verification_Operation(const ECDSA_PublicKey& ecdsa,
@@ -156,6 +164,21 @@ std::unique_ptr<PK_Ops::Verification>
 ECDSA_PublicKey::create_verification_op(const std::string& params,
                                         const std::string& provider) const
    {
+#if defined(BOTAN_HAS_BEARSSL)
+   if(provider == "bearssl" || provider.empty())
+      {
+      try
+         {
+         return make_bearssl_ecdsa_ver_op(*this, params);
+         }
+      catch(Lookup_Error& e)
+         {
+         if(provider == "bearssl")
+            throw;
+         }
+      }
+#endif
+
 #if defined(BOTAN_HAS_OPENSSL)
    if(provider == "openssl" || provider.empty())
       {
@@ -182,6 +205,21 @@ ECDSA_PrivateKey::create_signature_op(RandomNumberGenerator& /*rng*/,
                                       const std::string& params,
                                       const std::string& provider) const
    {
+#if defined(BOTAN_HAS_BEARSSL)
+   if(provider == "bearssl" || provider.empty())
+      {
+      try
+         {
+         return make_bearssl_ecdsa_sig_op(*this, params);
+         }
+      catch(Lookup_Error& e)
+         {
+         if(provider == "bearssl")
+            throw;
+         }
+      }
+#endif
+
 #if defined(BOTAN_HAS_OPENSSL)
    if(provider == "openssl" || provider.empty())
       {
