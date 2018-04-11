@@ -10,13 +10,15 @@
 #include <botan/cpuid.h>
 #include <botan/exceptn.h>
 #include <botan/mem_ops.h>
+
 #include <chrono>
+#include <cstdlib>
 
 #if defined(BOTAN_TARGET_OS_HAS_EXPLICIT_BZERO)
   #include <string.h>
 #endif
 
-#if defined(BOTAN_TARGET_OS_TYPE_IS_UNIX)
+#if defined(BOTAN_TARGET_OS_HAS_POSIX1)
   #include <sys/types.h>
   #include <sys/resource.h>
   #include <sys/mman.h>
@@ -24,7 +26,7 @@
   #include <setjmp.h>
   #include <unistd.h>
   #include <errno.h>
-#elif defined(BOTAN_TARGET_OS_TYPE_IS_WINDOWS)
+#elif defined(BOTAN_TARGET_OS_HAS_WIN32)
   #define NOMINMAX 1
   #include <windows.h>
 #endif
@@ -61,11 +63,11 @@ void secure_scrub_memory(void* ptr, size_t n)
 
 uint32_t OS::get_process_id()
    {
-#if defined(BOTAN_TARGET_OS_TYPE_IS_UNIX)
+#if defined(BOTAN_TARGET_OS_HAS_POSIX1)
    return ::getpid();
-#elif defined(BOTAN_TARGET_OS_IS_WINDOWS) || defined(BOTAN_TARGET_OS_IS_MINGW)
+#elif defined(BOTAN_TARGET_OS_HAS_WIN32)
    return ::GetCurrentProcessId();
-#elif defined(BOTAN_TARGET_OS_TYPE_IS_UNIKERNEL) || defined(BOTAN_TARGET_OS_IS_LLVM)
+#elif defined(BOTAN_TARGET_OS_IS_INCLUDEOS) || defined(BOTAN_TARGET_OS_IS_LLVM)
    return 0; // truly no meaningful value
 #else
    #error "Missing get_process_id"
@@ -76,7 +78,7 @@ uint64_t OS::get_processor_timestamp()
    {
    uint64_t rtc = 0;
 
-#if defined(BOTAN_TARGET_OS_HAS_QUERY_PERF_COUNTER)
+#if defined(BOTAN_TARGET_OS_HAS_WIN32)
    LARGE_INTEGER tv;
    ::QueryPerformanceCounter(&tv);
    rtc = tv.QuadPart;
@@ -93,16 +95,19 @@ uint64_t OS::get_processor_timestamp()
       }
 
 #elif defined(BOTAN_TARGET_ARCH_IS_PPC64)
-   uint32_t rtc_low = 0, rtc_high = 0;
-   asm volatile("mftbu %0; mftb %1" : "=r" (rtc_high), "=r" (rtc_low));
 
-   /*
-   qemu-ppc seems to not support mftb instr, it always returns zero.
-   If both time bases are 0, assume broken and return another clock.
-   */
-   if(rtc_high > 0 || rtc_low > 0)
+   for(;;)
       {
-      rtc = (static_cast<uint64_t>(rtc_high) << 32) | rtc_low;
+      uint32_t rtc_low = 0, rtc_high = 0, rtc_high2 = 0;
+      asm volatile("mftbu %0" : "=r" (rtc_high));
+      asm volatile("mftb %0" : "=r" (rtc_low));
+      asm volatile("mftbu %0" : "=r" (rtc_high2));
+
+      if(rtc_high == rtc_high2)
+	 {
+         rtc = (static_cast<uint64_t>(rtc_high) << 32) | rtc_low;
+         break;
+	 }
       }
 
 #elif defined(BOTAN_TARGET_ARCH_IS_ALPHA)
@@ -192,9 +197,27 @@ uint64_t OS::get_system_timestamp_ns()
    return std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
    }
 
+size_t OS::system_page_size()
+   {
+#if defined(BOTAN_TARGET_OS_HAS_POSIX1)
+   long p = ::sysconf(_SC_PAGESIZE);
+   if(p > 1)
+      return static_cast<size_t>(p);
+   else
+      return 4096;
+#elif defined(BOTAN_TARGET_OS_HAS_VIRTUAL_LOCK)
+   SYSTEM_INFO sys_info;
+   ::GetSystemInfo(&sys_info);
+   return sys_info.dwPageSize;
+#endif
+
+   // default value
+   return 4096;
+   }
+
 size_t OS::get_memory_locking_limit()
    {
-#if defined(BOTAN_TARGET_OS_HAS_POSIX_MLOCK)
+#if defined(BOTAN_TARGET_OS_HAS_POSIX1)
    /*
    * Linux defaults to only 64 KiB of mlockable memory per process
    * (too small) but BSDs offer a small fraction of total RAM (more
@@ -209,7 +232,7 @@ size_t OS::get_memory_locking_limit()
    /*
    * Allow override via env variable
    */
-   if(const char* env = ::getenv("BOTAN_MLOCK_POOL_SIZE"))
+   if(const char* env = std::getenv("BOTAN_MLOCK_POOL_SIZE"))
       {
       try
          {
@@ -243,16 +266,12 @@ size_t OS::get_memory_locking_limit()
    return 0;
 #endif
 
-#elif defined(BOTAN_TARGET_OS_HAS_VIRTUAL_LOCK) && defined(BOTAN_BUILD_COMPILER_IS_MSVC)
+#elif defined(BOTAN_TARGET_OS_HAS_VIRTUAL_LOCK)
    SIZE_T working_min = 0, working_max = 0;
-   DWORD working_flags = 0;
-   if(!::GetProcessWorkingSetSizeEx(::GetCurrentProcess(), &working_min, &working_max, &working_flags))
+   if(!::GetProcessWorkingSetSize(::GetCurrentProcess(), &working_min, &working_max))
       {
       return 0;
       }
-
-   SYSTEM_INFO sSysInfo;
-   ::GetSystemInfo(&sSysInfo);
 
    // According to Microsoft MSDN:
    // The maximum number of pages that a process can lock is equal to the number of pages in its minimum working set minus a small overhead
@@ -260,7 +279,7 @@ size_t OS::get_memory_locking_limit()
    // But the information in the book seems to be inaccurate/outdated
    // I've tested this on Windows 8.1 x64, Windows 10 x64 and Windows 7 x86
    // On all three OS the value is 11 instead of 8
-   size_t overhead = sSysInfo.dwPageSize * 11ULL;
+   size_t overhead = OS::system_page_size() * 11ULL;
    if(working_min > overhead)
       {
       size_t lockable_bytes = working_min - overhead;
@@ -280,7 +299,7 @@ size_t OS::get_memory_locking_limit()
 
 void* OS::allocate_locked_pages(size_t length)
    {
-#if defined(BOTAN_TARGET_OS_HAS_POSIX_MLOCK)
+#if defined(BOTAN_TARGET_OS_HAS_POSIX1)
 
 #if !defined(MAP_NOCORE)
    #define MAP_NOCORE 0
@@ -306,16 +325,18 @@ void* OS::allocate_locked_pages(size_t length)
    ::madvise(ptr, length, MADV_DONTDUMP);
 #endif
 
+#if defined(BOTAN_TARGET_OS_HAS_POSIX_MLOCK)
    if(::mlock(ptr, length) != 0)
       {
       ::munmap(ptr, length);
       return nullptr; // failed to lock
       }
+#endif
 
    ::memset(ptr, 0, length);
 
    return ptr;
-#elif defined BOTAN_TARGET_OS_HAS_VIRTUAL_LOCK
+#elif defined(BOTAN_TARGET_OS_HAS_VIRTUAL_LOCK)
    LPVOID ptr = ::VirtualAlloc(nullptr, length, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
    if(!ptr)
       {
@@ -340,11 +361,15 @@ void OS::free_locked_pages(void* ptr, size_t length)
    if(ptr == nullptr || length == 0)
       return;
 
-#if defined(BOTAN_TARGET_OS_HAS_POSIX_MLOCK)
+#if defined(BOTAN_TARGET_OS_HAS_POSIX1)
    secure_scrub_memory(ptr, length);
+
+#if defined(BOTAN_TARGET_OS_HAS_POSIX_MLOCK)
    ::munlock(ptr, length);
+#endif
+
    ::munmap(ptr, length);
-#elif defined BOTAN_TARGET_OS_HAS_VIRTUAL_LOCK
+#elif defined(BOTAN_TARGET_OS_HAS_VIRTUAL_LOCK)
    secure_scrub_memory(ptr, length);
    ::VirtualUnlock(ptr, length);
    ::VirtualFree(ptr, 0, MEM_RELEASE);
@@ -354,14 +379,14 @@ void OS::free_locked_pages(void* ptr, size_t length)
 #endif
    }
 
-#if defined(BOTAN_TARGET_OS_TYPE_IS_UNIX)
+#if defined(BOTAN_TARGET_OS_HAS_POSIX1)
 namespace {
 
 static ::sigjmp_buf g_sigill_jmp_buf;
 
 void botan_sigill_handler(int)
    {
-   ::siglongjmp(g_sigill_jmp_buf, /*non-zero return value*/1);
+   siglongjmp(g_sigill_jmp_buf, /*non-zero return value*/1);
    }
 
 }
@@ -371,7 +396,7 @@ int OS::run_cpu_instruction_probe(std::function<int ()> probe_fn)
    {
    volatile int probe_result = -3;
 
-#if defined(BOTAN_TARGET_OS_TYPE_IS_UNIX)
+#if defined(BOTAN_TARGET_OS_HAS_POSIX1)
    struct sigaction old_sigaction;
    struct sigaction sigaction;
 
@@ -384,7 +409,7 @@ int OS::run_cpu_instruction_probe(std::function<int ()> probe_fn)
    if(rc != 0)
       throw Exception("run_cpu_instruction_probe sigaction failed");
 
-   rc = ::sigsetjmp(g_sigill_jmp_buf, /*save sigs*/1);
+   rc = sigsetjmp(g_sigill_jmp_buf, /*save sigs*/1);
 
    if(rc == 0)
       {

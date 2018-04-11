@@ -19,8 +19,9 @@ using namespace Botan_FFI;
 
 int botan_mp_init(botan_mp_t* mp_out)
    {
-   return ffi_guard_thunk(BOTAN_CURRENT_FUNCTION, [=]() {
-      BOTAN_ASSERT_ARG_NON_NULL(mp_out);
+   return ffi_guard_thunk(BOTAN_CURRENT_FUNCTION, [=]() -> int {
+      if(mp_out == nullptr)
+         return BOTAN_FFI_ERROR_NULL_POINTER;
 
       *mp_out = new botan_mp_struct(new Botan::BigInt);
       return BOTAN_FFI_SUCCESS;
@@ -128,9 +129,10 @@ int botan_mp_to_bin(const botan_mp_t mp, uint8_t vec[])
 
 int botan_mp_to_uint32(const botan_mp_t mp, uint32_t* val)
    {
-   if(val == nullptr) {
-   return BOTAN_FFI_ERROR_NULL_POINTER;
-   }
+   if(val == nullptr)
+      {
+      return BOTAN_FFI_ERROR_NULL_POINTER;
+      }
    return BOTAN_FFI_DO(Botan::BigInt, mp, bn, { *val = bn.to_u32bit(); });
    }
 

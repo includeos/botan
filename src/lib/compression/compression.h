@@ -20,6 +20,21 @@ class BOTAN_PUBLIC_API(2,0) Compression_Algorithm
    {
    public:
       /**
+      * Create an instance based on a name, or return null if the
+      * algo combination cannot be found.
+      */
+      static std::unique_ptr<Compression_Algorithm>
+         create(const std::string& algo_spec);
+
+      /**
+      * Create an instance based on a name
+      * @param algo_spec algorithm name
+      * Throws Lookup_Error if not found.
+      */
+      static std::unique_ptr<Compression_Algorithm>
+         create_or_throw(const std::string& algo_spec);
+
+      /**
       * Begin compressing. Most compression algorithms offer a tunable
       * time/compression tradeoff parameter generally represented by
       * an integer in the range of 1 to 9.
@@ -30,7 +45,7 @@ class BOTAN_PUBLIC_API(2,0) Compression_Algorithm
       virtual void start(size_t comp_level = 0) = 0;
 
       /**
-      * Process some data. Input must be in size update_granularity() uint8_t blocks.
+      * Process some data.
       * @param buf in/out parameter which will possibly be resized or swapped
       * @param offset an offset into blocks to begin processing
       * @param flush if true the compressor will be told to flush state
@@ -66,13 +81,28 @@ class BOTAN_PUBLIC_API(2,0) Decompression_Algorithm
    {
    public:
       /**
+      * Create an instance based on a name, or return null if the
+      * algo combination cannot be found.
+      */
+      static std::unique_ptr<Decompression_Algorithm>
+         create(const std::string& algo_spec);
+
+      /**
+      * Create an instance based on a name
+      * @param algo_spec algorithm name
+      * Throws Lookup_Error if not found.
+      */
+      static std::unique_ptr<Decompression_Algorithm>
+         create_or_throw(const std::string& algo_spec);
+
+      /**
       * Begin decompressing.
       * Decompression does not support levels, as compression does.
       */
       virtual void start() = 0;
 
       /**
-      * Process some data. Input must be in size update_granularity() uint8_t blocks.
+      * Process some data.
       * @param buf in/out parameter which will possibly be resized or swapped
       * @param offset an offset into blocks to begin processing
       */

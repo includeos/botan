@@ -15,6 +15,7 @@ namespace Botan {
 */
 void HMAC::add_data(const uint8_t input[], size_t length)
    {
+   verify_key_set(m_ikey.empty() == false);
    m_hash->update(input, length);
    }
 
@@ -23,11 +24,18 @@ void HMAC::add_data(const uint8_t input[], size_t length)
 */
 void HMAC::final_result(uint8_t mac[])
    {
+   verify_key_set(m_okey.empty() == false);
    m_hash->final(mac);
    m_hash->update(m_okey);
    m_hash->update(mac, output_length());
    m_hash->final(mac);
    m_hash->update(m_ikey);
+   }
+
+Key_Length_Specification HMAC::key_spec() const
+   {
+   // Support very long lengths for things like PBKDF2 and the TLS PRF
+   return Key_Length_Specification(0, 4096);
    }
 
 /*

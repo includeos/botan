@@ -14,10 +14,46 @@
 
 namespace Botan_CLI {
 
+class Modular_Inverse final : public Command
+   {
+   public:
+      Modular_Inverse() : Command("mod_inverse n mod") {}
+
+      std::string group() const override
+         {
+         return "numtheory";
+         }
+
+      std::string description() const override
+         {
+         return "Calculates a modular inverse";
+         }
+
+      void go() override
+         {
+         const Botan::BigInt n(get_arg("n"));
+         const Botan::BigInt mod(get_arg("mod"));
+
+         output() << Botan::inverse_mod(n, mod) << "\n";
+         }
+   };
+
+BOTAN_REGISTER_COMMAND("mod_inverse", Modular_Inverse);
+
 class Gen_Prime final : public Command
    {
    public:
       Gen_Prime() : Command("gen_prime --count=1 bits") {}
+
+      std::string group() const override
+         {
+         return "numtheory";
+         }
+
+      std::string description() const override
+         {
+         return "Samples one or more primes";
+         }
 
       void go() override
          {
@@ -39,6 +75,16 @@ class Is_Prime final : public Command
    public:
       Is_Prime() : Command("is_prime --prob=56 n") {}
 
+      std::string group() const override
+         {
+         return "numtheory";
+         }
+
+      std::string description() const override
+         {
+         return "Test if the integer n is composite or prime";
+         }
+
       void go() override
          {
          Botan::BigInt n(get_arg("n"));
@@ -59,6 +105,16 @@ class Factor final : public Command
    {
    public:
       Factor() : Command("factor n") {}
+
+      std::string group() const override
+         {
+         return "numtheory";
+         }
+
+      std::string description() const override
+         {
+         return "Factor a given integer";
+         }
 
       void go() override
          {

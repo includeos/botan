@@ -26,6 +26,7 @@ Ciphers, Hashes, PBKDF
 * PMAC
 * Extend Cascade_Cipher to support arbitrary number of ciphers
 * EME* tweakable block cipher (https://eprint.iacr.org/2004/125.pdf)
+* FFX format preserving encryption (NIST 800-38G)
 
 Public Key Crypto, Math
 ----------------------------------------
@@ -39,14 +40,9 @@ Public Key Crypto, Math
 * X448 and Ed448
 * FHMQV
 * Use GLV decomposition to speed up secp256k1 operations
-* Support mixed hashes and non-empty param strings in OAEP
+* Optimize ECC point doubling for a=-3 and a=0 curves
 * wNAF ECC point multiply
 * Recover ECDSA public key from signature/message pair (GH #664)
-* Fast new implementations/algorithms for ECC point operations,
-  Montgomery multiplication, multi-exponentiation, ...
-* Some PK operations, especially RSA, have extensive computations per
-  operation setup but many of the computed values depend only on the
-  key and could be shared across operation objects.
 
 Utility Functions
 ------------------
@@ -69,7 +65,7 @@ External Providers, Hardware Support
 * /dev/crypto provider (ciphers, hashes)
 * Windows CryptoAPI provider (ciphers, hashes, RSA)
 * Apple CommonCrypto
-* POWER8 crypto extensions (AES, SHA-2)
+* POWER8 crypto extensions (SHA-2, GCM)
 * Better TPM support: NVRAM, PCR measurements, sealing
 * Intel SGX support
 
@@ -104,11 +100,13 @@ PKIX
 * OCSP responder logic
 * X.509 attribute certificates (RFC 5755)
 * Support generating/verifying XMSS certificates
-* Roughtime client (https://roughtime.googlesource.com/roughtime/)
 
 New Protocols / Formats
 ----------------------------------------
 
+* Roughtime client (https://roughtime.googlesource.com/roughtime/)
+* PKCS7 / Cryptographic Message Syntax
+* PKCS12 / PFX
 * NaCl compatible cryptobox functions
 * Off-The-Record v3 https://otr.cypherpunks.ca/
 * Some useful subset of OpenPGP
@@ -163,6 +161,7 @@ Build/Test
   debug info during CI
 * Run the TPM tests against an emulator
   (https://github.com/PeterHuewe/tpm-emulator)
+* Add clang-tidy, clang-analyzer, cppcheck to CI
 
 FIPS 140 Build
 ---------------------------------------
@@ -180,11 +179,8 @@ CLI
 
 * Change `tls_server` to be a tty<->socket app, like `tls_client` is,
   instead of a bogus echo server.
-* Add a basic HTTP server mode to tls_server, as some tools like
-  https://github.com/tomato42/tlsfuzzer require this.
 * `encrypt` / `decrypt` tools providing password and/or public key
   based file encryption
-* Make help output more helpful
 
 Documentation
 ----------------------------------------
@@ -192,5 +188,3 @@ Documentation
 * X.509 certs, path validation
 * Specific docs covering one major topic (RSA, ECDSA, AES/GCM, ...)
 * Some howto style docs (setting up CA, ...)
-* List each cipher, hash, etc, describe its usage, and give the
-  header file and BOTAN_HAS_X macro associated with it.

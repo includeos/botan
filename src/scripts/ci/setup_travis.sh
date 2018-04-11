@@ -56,7 +56,7 @@ if [ "$TRAVIS_OS_NAME" = "linux" ]; then
         (cd /home/travis/bin && ln -s gcov-4.8 gcov)
 
         pip install --user coverage
-        pip install --user codecov
+        pip install --user codecov==2.0.10
 
     elif [ "$BUILD_MODE" = "sonar" ]; then
         sudo apt-get -qq update
@@ -73,7 +73,7 @@ if [ "$TRAVIS_OS_NAME" = "linux" ]; then
 
     elif [ "$BUILD_MODE" = "docs" ]; then
         sudo apt-get -qq update
-        sudo apt-get install doxygen
+        sudo apt-get install doxygen python-docutils
 
         # The version of Sphinx in 14.04 is too old (1.2.2) and does not support
         # all C++ features used in the manual. Install python-requests to avoid

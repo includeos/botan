@@ -8,7 +8,6 @@
 #include <botan/asn1_time.h>
 #include <botan/der_enc.h>
 #include <botan/ber_dec.h>
-#include <botan/charset.h>
 #include <botan/exceptn.h>
 #include <botan/parsing.h>
 #include <botan/calendar.h>
@@ -21,12 +20,12 @@ X509_Time::X509_Time(const std::chrono::system_clock::time_point& time)
    {
    calendar_point cal = calendar_value(time);
 
-   m_year   = cal.year;
-   m_month  = cal.month;
-   m_day    = cal.day;
-   m_hour   = cal.hour;
-   m_minute = cal.minutes;
-   m_second = cal.seconds;
+   m_year   = cal.get_year();
+   m_month  = cal.get_month();
+   m_day    = cal.get_day();
+   m_hour   = cal.get_hour();
+   m_minute = cal.get_minutes();
+   m_second = cal.get_seconds();
 
    m_tag = (m_year >= 2050) ? GENERALIZED_TIME : UTC_TIME;
    }
@@ -41,20 +40,14 @@ void X509_Time::encode_into(DER_Encoder& der) const
    if(m_tag != GENERALIZED_TIME && m_tag != UTC_TIME)
       throw Invalid_Argument("X509_Time: Bad encoding tag");
 
-   der.add_object(m_tag, UNIVERSAL,
-                  Charset::transcode(to_string(),
-                                     LOCAL_CHARSET,
-                                     LATIN1_CHARSET));
+   der.add_object(m_tag, UNIVERSAL, to_string());
    }
 
 void X509_Time::decode_from(BER_Decoder& source)
    {
    BER_Object ber_time = source.get_next_object();
 
-   set_to(Charset::transcode(ASN1::to_string(ber_time),
-                             LATIN1_CHARSET,
-                             LOCAL_CHARSET),
-          ber_time.type_tag);
+   set_to(ASN1::to_string(ber_time), ber_time.type());
    }
 
 std::string X509_Time::to_string() const
@@ -104,14 +97,16 @@ std::string X509_Time::readable_string() const
 
    // desired format: "%04d/%02d/%02d %02d:%02d:%02d UTC"
    std::stringstream output;
-      {
-      using namespace std;
-      output << setfill('0')
-             << setw(4) << m_year << "/" << setw(2) << m_month << "/" << setw(2) << m_day
-             << " "
-             << setw(2) << m_hour << ":" << setw(2) << m_minute << ":" << setw(2) << m_second
-             << " UTC";
-      }
+   output << std::setfill('0')
+          << std::setw(4) << m_year << "/"
+          << std::setw(2) << m_month << "/"
+          << std::setw(2) << m_day
+          << " "
+          << std::setw(2) << m_hour << ":"
+          << std::setw(2) << m_minute << ":"
+          << std::setw(2) << m_second
+          << " UTC";
+
    return output.str();
    }
 

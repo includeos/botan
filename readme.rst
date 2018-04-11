@@ -10,7 +10,9 @@ offering the tools necessary to implement a range of practical systems, such as
 TLS/DTLS, PKIX certificate handling, PKCS#11 and TPM hardware support, password
 hashing, and post quantum crypto schemes. In addition to the C++, botan has a
 C89 API specifically designed to be easy to call from other languages. A Python
-binding using ctypes calling the C89 API is included.
+binding using ctypes is included, and several other
+`language bindings <https://github.com/randombit/botan/wiki/Language-Bindings>`_
+are available.
 
 Find the full feature list below.
 
@@ -70,9 +72,9 @@ external build systems, see the manual for details.
     :target: https://scan.coverity.com/projects/624
     :alt: Coverity results
 
-.. image:: https://sonarqube.com/api/badges/gate?key=botan
-    :target: https://sonarqube.com/dashboard/index/botan
-    :alt: Sonarqube analysis
+.. image:: https://sonarcloud.io/api/project_badges/measure?project=botan&metric=ncloc
+    :target: https://sonarcloud.io/dashboard/index/botan
+    :alt: Sonarcloud analysis
 
 .. image:: https://bestpractices.coreinfrastructure.org/projects/531/badge
     :target: https://bestpractices.coreinfrastructure.org/projects/531
@@ -91,28 +93,28 @@ All releases are signed with a
         Key fingerprint = 621D AF64 11E1 851C 4CF9  A2E1 6211 EBF1 EFBA DFBC
   uid                  Botan Distribution Key
 
-Some distributions such as Arch, Fedora and Debian include packages
-for Botan. However these are often out of date; using the latest
-source release is recommended.
+Some `distributions <https://github.com/randombit/botan/wiki/Distros>`_
+such as Arch, Fedora and Debian include packages for Botan. However
+these are often out of date; using the latest source release is recommended.
 
 Current Stable Release
 ----------------------------------------
 
-Version 2 requires a C++11 compiler; GCC 4.8 and later, Clang 3.5 and
-later, and MSVC 2015 are regularly tested.
+Version 2 requires a C++11 compiler; GCC 4.8 and later, Clang 3.8 and later, and
+MSVC 2015/2017 are regularly tested. New releases of Botan 2 are made on a
+quarterly basis.
 
 The latest 2.x release is
-`2.3.0 <https://botan.randombit.net/releases/Botan-2.3.0.tgz>`_
-`(sig) <https://botan.randombit.net/releases/Botan-2.3.0.tgz.asc>`_
-released on 2017-10-02
+`2.6.0 <https://botan.randombit.net/releases/Botan-2.6.0.tgz>`_
+`(sig) <https://botan.randombit.net/releases/Botan-2.6.0.tgz.asc>`_
+released on 2018-04-10
 
-Old Stable Release
+Old Release
 ----------------------------------------
 
-The 1.10 branch is the last version of the library written in C++98 and is still
-the most commonly packaged version. It is no longer supported except for
-critical security updates (with all support ending on 2018-1-1), and the
-developers do not recommend its use anymore.
+The 1.10 branch is the last version of the library written in C++98. It is no
+longer supported except for critical security updates (with all support ending
+in 2018), and the developers do not recommend its use anymore.
 
 The latest 1.10 release is
 `1.10.17 <https://botan.randombit.net/releases/Botan-1.10.17.tgz>`_
@@ -184,7 +186,7 @@ Other Useful Things
 * HOTP and TOTP algorithms
 * Format preserving encryption scheme FE1
 * Threshold secret sharing
-* RFC 3394 AES key wrap
+* NIST key wrapping
 
 Recommended Algorithms
 ----------------------------------------

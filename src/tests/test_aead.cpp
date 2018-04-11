@@ -28,7 +28,7 @@ class AEAD_Tests final : public Text_Based_Test
          {
          Test::Result result(algo);
 
-         std::unique_ptr<Botan::AEAD_Mode> enc(Botan::get_aead(algo, Botan::ENCRYPTION));
+         std::unique_ptr<Botan::AEAD_Mode> enc(Botan::AEAD_Mode::create(algo, Botan::ENCRYPTION));
 
          result.test_eq("AEAD encrypt output_length is correct", enc->output_length(input.size()), expected.size());
 
@@ -142,7 +142,7 @@ class AEAD_Tests final : public Text_Based_Test
          {
          Test::Result result(algo);
 
-         std::unique_ptr<Botan::AEAD_Mode> dec(Botan::get_aead(algo, Botan::DECRYPTION));
+         std::unique_ptr<Botan::AEAD_Mode> dec(Botan::AEAD_Mode::create(algo, Botan::DECRYPTION));
 
          result.test_eq("AEAD decrypt output_length is correct", dec->output_length(input.size()), expected.size());
 
@@ -327,8 +327,8 @@ class AEAD_Tests final : public Text_Based_Test
 
          Test::Result result(algo);
 
-         std::unique_ptr<Botan::AEAD_Mode> enc(Botan::get_aead(algo, Botan::ENCRYPTION));
-         std::unique_ptr<Botan::AEAD_Mode> dec(Botan::get_aead(algo, Botan::DECRYPTION));
+         std::unique_ptr<Botan::AEAD_Mode> enc(Botan::AEAD_Mode::create(algo, Botan::ENCRYPTION));
+         std::unique_ptr<Botan::AEAD_Mode> dec(Botan::AEAD_Mode::create(algo, Botan::DECRYPTION));
 
          if(!enc || !dec)
             {
@@ -339,6 +339,17 @@ class AEAD_Tests final : public Text_Based_Test
          // must be authenticated
          result.test_eq("Encryption algo is an authenticated mode", enc->authenticated(), true);
          result.test_eq("Decryption algo is an authenticated mode", dec->authenticated(), true);
+
+         const std::string enc_provider = enc->provider();
+         result.test_is_nonempty("enc provider", enc_provider);
+         const std::string dec_provider = enc->provider();
+         result.test_is_nonempty("dec provider", dec_provider);
+
+         result.test_eq("same provider", enc_provider, dec_provider);
+
+         // FFI currently requires this, so assure it is true for all modes
+         result.test_gte("enc buffer sizes ok", enc->update_granularity(), enc->minimum_final_size());
+         result.test_gte("dec buffer sizes ok", dec->update_granularity(), dec->minimum_final_size());
 
          // test enc
          result.merge(test_enc(key, nonce, input, expected, ad, algo));

@@ -26,7 +26,7 @@ is recommend for new applications.
 
 .. cpp:function:: OctetString PBKDF::derive_key( \
    size_t output_len, const std::string& passphrase, \
-   const byte* salt, size_t salt_len, \
+   const uint8_t* salt, size_t salt_len, \
    size_t iterations) const
 
    Computes a key from *passphrase* and the *salt* (of length
@@ -46,14 +46,26 @@ is recommend for new applications.
    PBKDF* pbkdf = get_pbkdf("PBKDF2(SHA-256)");
    AutoSeeded_RNG rng;
 
-   secure_vector<byte> salt = rng.random_vec(16);
+   secure_vector<uint8_t> salt = rng.random_vec(16);
    OctetString aes256_key = pbkdf->derive_key(32, "password",
                                               &salt[0], salt.size(),
                                               10000);
 
+PBKDF1
+------------
+
+PBKDF1 is an old scheme that can only produce an output length at most
+as long as the hash function. It is deprecated and will be removed in
+a future release.
+
+PBKDF2
+------------
+
+PBKDF2 is a the "standard" password derivation scheme, widely
+implemented in many different libraries.
 
 OpenPGP S2K
-----------------------------------------
+-------------
 
 There are some oddities about OpenPGP's S2K algorithms that are
 documented here. For one thing, it uses the iteration count in a

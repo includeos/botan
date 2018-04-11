@@ -58,6 +58,7 @@ std::string CPUID::to_string()
 
 #if defined(BOTAN_TARGET_CPU_IS_PPC_FAMILY)
    CPUID_PRINT(altivec);
+   CPUID_PRINT(ppc_crypto);
 #endif
 
 #if defined(BOTAN_TARGET_CPU_IS_ARM_FAMILY)
@@ -92,6 +93,7 @@ void CPUID::initialize()
 
 #endif
 
+   g_endian_status = runtime_check_endian();
    g_processor_features |= CPUID::CPUID_INITIALIZED_BIT;
    }
 

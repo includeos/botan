@@ -47,13 +47,78 @@ class Test_Error final : public Botan::Exception
       explicit Test_Error(const std::string& what) : Exception("Test error", what) {}
    };
 
-class Provider_Filter final
+class Test_Options
    {
    public:
-      void set(const std::string& provider) { m_provider = provider; }
-      std::vector<std::string> filter(const std::vector<std::string>&) const;
+      Test_Options() = default;
+
+      Test_Options(const std::vector<std::string>& requested_tests,
+                   const std::string& data_dir,
+                   const std::string& pkcs11_lib,
+                   const std::string& provider,
+                   const std::string& drbg_seed,
+                   size_t test_runs,
+                   bool log_success,
+                   bool run_online_tests,
+                   bool run_long_tests,
+                   bool abort_on_first_fail,
+                   bool no_avoid_undefined) :
+         m_requested_tests(requested_tests),
+         m_data_dir(data_dir),
+         m_pkcs11_lib(pkcs11_lib),
+         m_provider(provider),
+         m_drbg_seed(drbg_seed),
+         m_test_runs(test_runs),
+         m_log_success(log_success),
+         m_run_online_tests(run_online_tests),
+         m_run_long_tests(run_long_tests),
+         m_abort_on_first_fail(abort_on_first_fail),
+         m_no_avoid_undefined(no_avoid_undefined)
+         {}
+
+      const std::vector<std::string>& requested_tests() const
+         { return m_requested_tests; }
+
+      const std::string& data_dir() const { return m_data_dir; }
+
+      const std::string& pkcs11_lib() const { return m_pkcs11_lib; }
+
+      const std::string& provider() const { return m_provider; }
+
+      const std::string& drbg_seed() const { return m_drbg_seed; }
+
+      size_t test_runs() const { return m_test_runs; }
+
+      bool log_success() const { return m_log_success; }
+
+      bool run_online_tests() const { return m_run_online_tests; }
+
+      bool run_long_tests() const { return m_run_long_tests; }
+
+      bool abort_on_first_fail() const { return m_abort_on_first_fail; }
+
+      bool no_avoid_undefined_behavior() const
+         {
+#if defined(BOTAN_HAS_SANITIZER_UNDEFINED)
+         return m_no_avoid_undefined;
+#else
+         BOTAN_UNUSED(m_no_avoid_undefined);
+         return true;
+#endif
+         }
+
    private:
+      std::vector<std::string> m_requested_tests;
+      std::string m_data_dir;
+      std::string m_pkcs11_lib;
       std::string m_provider;
+      std::string m_drbg_seed;
+      size_t m_test_runs;
+      bool m_log_success;
+      bool m_run_online_tests;
+      bool m_run_long_tests;
+      bool m_abort_on_first_fail;
+      bool m_no_avoid_undefined;
    };
 
 /*
@@ -190,6 +255,15 @@ class Test
                   out << " produced unexpected result '" << produced << "' expected '" << expected << "'";
                   return test_failure(out.str());
                   }
+               }
+
+            template<typename T>
+            bool test_not_null(const std::string& what, T* ptr)
+               {
+               if(ptr == nullptr)
+                  return test_failure(what + " was null");
+               else
+                  return test_success(what + " was not null");
                }
 
             bool test_eq(const std::string& what, const char* produced, const char* expected);
@@ -353,11 +427,10 @@ class Test
             Registration(const std::string& name, Test* test);
          };
 
-      virtual std::vector<Test::Result> run() = 0;
       virtual ~Test() = default;
-      virtual std::vector<std::string> possible_providers(const std::string&);
+      virtual std::vector<Test::Result> run() = 0;
 
-      static std::vector<Test::Result> run_test(const std::string& what, bool fail_if_missing);
+      virtual std::vector<std::string> possible_providers(const std::string&);
 
       static std::map<std::string, std::unique_ptr<Test>>& global_registry();
 
@@ -397,40 +470,37 @@ class Test
          return r;
          }
 
-      static void setup_tests(bool log_succcss,
-                              bool run_online_tests,
-                              bool run_long_tests,
-                              const std::string& data_dir,
-                              const std::string& pkcs11_lib,
-                              const Botan_Tests::Provider_Filter& pf,
-                              Botan::RandomNumberGenerator* rng);
+      static void set_test_options(const Test_Options& opts);
 
-      static bool log_success();
-      static bool run_online_tests();
-      static bool run_long_tests();
-      static std::string pkcs11_lib();
-      static std::vector<std::string> provider_filter(const std::vector<std::string>&);
+      static void set_test_rng(std::unique_ptr<Botan::RandomNumberGenerator> rng);
 
-      static const std::string& data_dir();
+      static bool no_avoid_undefined_behavior() { return m_opts.no_avoid_undefined_behavior(); }
+      static bool log_success() { return m_opts.log_success(); }
+      static bool run_online_tests() { return m_opts.run_online_tests(); }
+      static bool run_long_tests() { return m_opts.run_long_tests(); }
+      static bool abort_on_first_fail() { return m_opts.abort_on_first_fail(); }
+      static const std::string& data_dir() { return m_opts.data_dir(); }
+      static const std::string& pkcs11_lib() { return m_opts.pkcs11_lib(); }
+
+      static std::vector<std::string> provider_filter(const std::vector<std::string>& providers);
+
+      static std::string read_data_file(const std::string& path);
+      static std::vector<uint8_t> read_binary_data_file(const std::string& path);
 
       static Botan::RandomNumberGenerator& rng();
       static std::string random_password();
       static uint64_t timestamp(); // nanoseconds arbitrary epoch
 
    private:
-      static std::string m_data_dir;
-      static Botan::RandomNumberGenerator* m_test_rng;
-      static bool m_log_success, m_run_online_tests, m_run_long_tests;
-      static std::string m_pkcs11_lib;
-      static Botan_Tests::Provider_Filter m_provider_filter;
+      static Test_Options m_opts;
+      static std::unique_ptr<Botan::RandomNumberGenerator> m_test_rng;
    };
 
 /*
 * Register the test with the runner
 */
 #define BOTAN_REGISTER_TEST(type, Test_Class) \
-   namespace { Test::Registration reg_ ## Test_Class ## _tests(type, new Test_Class); } \
-   BOTAN_FORCE_SEMICOLON
+   Test::Registration reg_ ## Test_Class ## _tests(type, new Test_Class)
 
 /*
 * A test based on reading an input file which contains key/value pairs

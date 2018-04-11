@@ -6,6 +6,8 @@
 * Botan is released under the Simplified BSD License (see license.txt)
 */
 
+#define BOTAN_NO_DEPRECATED_WARNINGS
+
 #include "tests.h"
 #include <functional>
 #include <ctime>
@@ -49,7 +51,7 @@ class Utility_Function_Tests final : public Text_Based_Test
                Botan::round_up(x, 0);
                result.test_failure("round_up did not reject invalid input");
                }
-            catch(std::exception) {}
+            catch(std::exception&) {}
             }
          else if(algo == "round_down")
             {
@@ -264,33 +266,34 @@ class Date_Format_Tests final : public Text_Based_Test
 
       Test::Result run_one_test(const std::string& type, const VarMap& vars) override
          {
+         const std::string date_str = get_req_str(vars, "Date");
          Test::Result result("Date parsing");
 
-         const std::vector<uint32_t> d = parse_date(get_req_str(vars, "Date"));
+         const std::vector<uint32_t> d = parse_date(date_str);
 
          if(type == "valid" || type == "valid.not_std" || type == "valid.64_bit_time_t")
             {
             Botan::calendar_point c(d[0], d[1], d[2], d[3], d[4], d[5]);
-            result.test_is_eq("year", c.year, d[0]);
-            result.test_is_eq("month", c.month, d[1]);
-            result.test_is_eq("day", c.day, d[2]);
-            result.test_is_eq("hour", c.hour, d[3]);
-            result.test_is_eq("minute", c.minutes, d[4]);
-            result.test_is_eq("second", c.seconds, d[5]);
+            result.test_is_eq(date_str + " year", c.get_year(), d[0]);
+            result.test_is_eq(date_str + " month", c.get_month(), d[1]);
+            result.test_is_eq(date_str + " day", c.get_day(), d[2]);
+            result.test_is_eq(date_str + " hour", c.get_hour(), d[3]);
+            result.test_is_eq(date_str + " minute", c.get_minutes(), d[4]);
+            result.test_is_eq(date_str + " second", c.get_seconds(), d[5]);
 
-            if(type == "valid.not_std" || (type == "valid.64_bit_time_t" && c.year > 2037 && sizeof(std::time_t) == 4))
+            if(type == "valid.not_std" || (type == "valid.64_bit_time_t" && c.get_year() > 2037 && sizeof(std::time_t) == 4))
                {
                result.test_throws("valid but out of std::timepoint range", [c]() { c.to_std_timepoint(); });
                }
             else
                {
                Botan::calendar_point c2 = Botan::calendar_value(c.to_std_timepoint());
-               result.test_is_eq("year", c2.year, d[0]);
-               result.test_is_eq("month", c2.month, d[1]);
-               result.test_is_eq("day", c2.day, d[2]);
-               result.test_is_eq("hour", c2.hour, d[3]);
-               result.test_is_eq("minute", c2.minutes, d[4]);
-               result.test_is_eq("second", c2.seconds, d[5]);
+               result.test_is_eq(date_str + " year", c2.get_year(), d[0]);
+               result.test_is_eq(date_str + " month", c2.get_month(), d[1]);
+               result.test_is_eq(date_str + " day", c2.get_day(), d[2]);
+               result.test_is_eq(date_str + " hour", c2.get_hour(), d[3]);
+               result.test_is_eq(date_str + " minute", c2.get_minutes(), d[4]);
+               result.test_is_eq(date_str + " second", c2.get_seconds(), d[5]);
                }
             }
          else if(type == "invalid")
@@ -404,28 +407,38 @@ class Charset_Tests final : public Text_Based_Test
 
       Test::Result run_one_test(const std::string& type, const VarMap& vars) override
          {
-         using namespace Botan;
-
          Test::Result result("Charset");
 
          const std::vector<uint8_t> in = get_req_bin(vars, "In");
          const std::vector<uint8_t> expected = get_req_bin(vars, "Out");
 
+         const std::string in_str(in.begin(), in.end());
+
          std::string converted;
-         if(type == "UTF16-LATIN1")
+
+         if(type == "UCS2-UTF8")
             {
-            converted = Charset::transcode(std::string(in.begin(), in.end()),
-                                           Character_Set::LATIN1_CHARSET, Character_Set::UCS2_CHARSET);
+            converted = Botan::ucs2_to_utf8(in.data(), in.size());
+            }
+         else if(type == "UCS4-UTF8")
+            {
+            converted = Botan::ucs4_to_utf8(in.data(), in.size());
             }
          else if(type == "UTF8-LATIN1")
             {
-            converted = Charset::transcode(std::string(in.begin(), in.end()),
-                                           Character_Set::LATIN1_CHARSET, Character_Set::UTF8_CHARSET);
+            converted = Botan::utf8_to_latin1(in_str);
+            }
+         else if(type == "UTF16-LATIN1")
+            {
+            converted = Botan::Charset::transcode(in_str,
+                                                  Botan::Character_Set::LATIN1_CHARSET,
+                                                  Botan::Character_Set::UCS2_CHARSET);
             }
          else if(type == "LATIN1-UTF8")
             {
-            converted = Charset::transcode(std::string(in.begin(), in.end()),
-                                           Character_Set::UTF8_CHARSET, Character_Set::LATIN1_CHARSET);
+            converted = Botan::Charset::transcode(in_str,
+                                                  Botan::Character_Set::UTF8_CHARSET,
+                                                  Botan::Character_Set::LATIN1_CHARSET);
             }
          else
             {
@@ -439,8 +452,6 @@ class Charset_Tests final : public Text_Based_Test
 
       Test::Result utf16_to_latin1_negative_tests()
          {
-         using namespace Botan;
-
          Test::Result result("Charset negative tests");
 
          result.test_throws("conversion fails for non-Latin1 characters", []()
@@ -450,16 +461,18 @@ class Charset_Tests final : public Text_Based_Test
                                            0x78, 0x00, 0x61, 0x00, 0x62, 0x00, 0x63, 0x00, 0x64, 0x00, 0x65, 0x00, 0x66
                                          };
 
-            Charset::transcode(std::string(input.begin(), input.end()),
-                               Character_Set::LATIN1_CHARSET, Character_Set::UCS2_CHARSET);
+            Botan::Charset::transcode(std::string(input.begin(), input.end()),
+                                      Botan::Character_Set::LATIN1_CHARSET,
+                                      Botan::Character_Set::UCS2_CHARSET);
             });
 
          result.test_throws("conversion fails for UTF16 string with odd number of bytes", []()
             {
             std::vector<uint8_t> input = { 0x00, 0x61, 0x00 };
 
-            Charset::transcode(std::string(input.begin(), input.end()),
-                               Character_Set::LATIN1_CHARSET, Character_Set::UCS2_CHARSET);
+            Botan::Charset::transcode(std::string(input.begin(), input.end()),
+                                      Botan::Character_Set::LATIN1_CHARSET,
+                                      Botan::Character_Set::UCS2_CHARSET);
             });
 
          return result;
@@ -467,36 +480,30 @@ class Charset_Tests final : public Text_Based_Test
 
       Test::Result utf8_to_latin1_negative_tests()
          {
-         using namespace Botan;
-
          Test::Result result("Charset negative tests");
 
          result.test_throws("conversion fails for non-Latin1 characters", []()
             {
             // "abcdefŸabcdef"
-            std::vector<uint8_t> input = { 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0xC5,
-                                           0xB8, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66
-                                         };
+            const std::vector<uint8_t> input = {
+               0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0xC5,
+               0xB8, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66
+            };
 
-            Charset::transcode(std::string(input.begin(), input.end()),
-                               Character_Set::LATIN1_CHARSET, Character_Set::UTF8_CHARSET);
+            Botan::utf8_to_latin1(std::string(input.begin(), input.end()));
             });
 
          result.test_throws("invalid utf-8 string", []()
             {
             // sequence truncated
-            std::vector<uint8_t> input = { 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0xC5 };
-
-            Charset::transcode(std::string(input.begin(), input.end()),
-                               Character_Set::LATIN1_CHARSET, Character_Set::UTF8_CHARSET);
+            const std::vector<uint8_t> input = { 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0xC5 };
+            Botan::utf8_to_latin1(std::string(input.begin(), input.end()));
             });
 
          result.test_throws("invalid utf-8 string", []()
             {
             std::vector<uint8_t> input = { 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0xC8, 0xB8, 0x61 };
-
-            Charset::transcode(std::string(input.begin(), input.end()),
-                               Character_Set::LATIN1_CHARSET, Character_Set::UTF8_CHARSET);
+            Botan::utf8_to_latin1(std::string(input.begin(), input.end()));
             });
 
          return result;
@@ -504,8 +511,6 @@ class Charset_Tests final : public Text_Based_Test
 
       std::vector<Test::Result> run_final_tests() override
          {
-         using namespace Botan;
-
          Test::Result result("Charset negative tests");
 
          result.merge(utf16_to_latin1_negative_tests());
@@ -526,9 +531,7 @@ class Hostname_Tests final : public Text_Based_Test
 
       Test::Result run_one_test(const std::string& type, const VarMap& vars) override
          {
-         using namespace Botan;
-
-         Test::Result result("Hostname");
+         Test::Result result("Hostname Matching");
 
          const std::string issued = get_req_str(vars, "Issued");
          const std::string hostname = get_req_str(vars, "Hostname");
@@ -543,6 +546,50 @@ class Hostname_Tests final : public Text_Based_Test
    };
 
 BOTAN_REGISTER_TEST("hostname", Hostname_Tests);
+
+class CPUID_Tests final : public Test
+   {
+   public:
+
+      std::vector<Test::Result> run() override
+         {
+         Test::Result result("CPUID");
+
+         result.confirm("Endian is either little or big",
+                        Botan::CPUID::is_big_endian() || Botan::CPUID::is_little_endian());
+
+         if(Botan::CPUID::is_little_endian())
+            {
+            result.test_eq("If endian is little, it is not also big endian", Botan::CPUID::is_big_endian(), false);
+            }
+         else
+            {
+            result.test_eq("If endian is big, it is not also little endian", Botan::CPUID::is_little_endian(), false);
+            }
+
+         const std::string cpuid_string = Botan::CPUID::to_string();
+         result.test_success("CPUID::to_string doesn't crash");
+
+#if defined(BOTAN_TARGET_CPU_IS_X86_FAMILY)
+
+         if(Botan::CPUID::has_sse2())
+            {
+            result.confirm("Output string includes sse2", cpuid_string.find("sse2") != std::string::npos);
+
+            Botan::CPUID::clear_cpuid_bit(Botan::CPUID::CPUID_SSE2_BIT);
+
+            result.test_eq("After clearing cpuid bit, has_sse2 returns false", Botan::CPUID::has_sse2(), false);
+
+            Botan::CPUID::initialize(); // reset state
+            result.test_eq("After reinitializing, has_sse2 returns true", Botan::CPUID::has_sse2(), true);
+            }
+#endif
+
+         return {result};
+         }
+   };
+
+BOTAN_REGISTER_TEST("cpuid", CPUID_Tests);
 
 }
 

@@ -39,7 +39,7 @@ class Stream_Cipher_Tests final : public Text_Based_Test
 
          if(providers.empty())
             {
-            result.note_missing("block cipher " + algo);
+            result.note_missing("stream cipher " + algo);
             return result;
             }
 
@@ -56,7 +56,42 @@ class Stream_Cipher_Tests final : public Text_Based_Test
             const std::string provider(cipher->provider());
             result.test_is_nonempty("provider", provider);
             result.test_eq(provider, cipher->name(), algo);
+
+            try
+               {
+               std::vector<uint8_t> buf(128);
+               cipher->cipher1(buf.data(), buf.size());
+               result.test_failure("Was able to encrypt without a key being set");
+               }
+            catch(Botan::Invalid_State&)
+               {
+               result.test_success("Trying to encrypt with no key set fails");
+               }
+
+            try
+               {
+               cipher->seek(0);
+               result.test_failure("Was able to seek without a key being set");
+               }
+            catch(Botan::Invalid_State&)
+               {
+               result.test_success("Trying to seek with no key set fails");
+               }
+            catch(Botan::Not_Implemented&)
+               {
+               result.test_success("Trying to seek failed because not implemented");
+               }
+
             cipher->set_key(key);
+
+            /*
+            Test invalid nonce sizes. this assumes no implemented cipher supports a nonce of 65000
+            */
+            const size_t large_nonce_size = 65000;
+            result.confirm("Stream cipher does not support very large nonce", cipher->valid_iv_length(large_nonce_size) == false);
+
+            result.test_throws("Throws if invalid nonce size given",
+                               [&]() { cipher->set_iv(nullptr, large_nonce_size); });
 
             if(nonce.size())
                {
@@ -91,12 +126,24 @@ class Stream_Cipher_Tests final : public Text_Based_Test
             result.test_eq("Clone has same name", cipher->name(), clone->name());
             clone->set_key(Test::rng().random_vec(cipher->maximum_keylength()));
 
+            {
             std::vector<uint8_t> buf = input;
             cipher->encrypt(buf);
+            result.test_eq(provider, "encrypt", buf, expected);
+            }
 
             cipher->clear();
 
-            result.test_eq(provider, "encrypt", buf, expected);
+            try
+               {
+               std::vector<uint8_t> buf(128);
+               cipher->cipher1(buf.data(), buf.size());
+               result.test_failure("Was able to encrypt without a key being set (after clear)");
+               }
+            catch(Botan::Invalid_State&)
+               {
+               result.test_success("Trying to encrypt with no key set (after clear) fails");
+               }
             }
 
          return result;

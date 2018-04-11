@@ -127,19 +127,17 @@ class ECIES_ISO_Tests final : public Text_Based_Test
          const std::vector<uint8_t> c0 = get_req_bin(vars, "C0");   // expected encoded (ephemeral) public key
          const std::vector<uint8_t> k = get_req_bin(vars, "K");   // expected derived secret
 
-         const Botan::CurveGFp curve(p, a, b);
-         const Botan::EC_Group domain(curve, Botan::PointGFp(curve, gx, gy), mu, nu);
+         const Botan::EC_Group domain(p, a, b, gx, gy, mu, nu);
 
          // keys of bob
          const Botan::ECDH_PrivateKey other_private_key(Test::rng(), domain, x);
-         const Botan::PointGFp other_public_key_point(curve, hx, hy);
+         const Botan::PointGFp other_public_key_point = domain.point(hx, hy);
          const Botan::ECDH_PublicKey other_public_key(domain, other_public_key_point);
 
          // (ephemeral) keys of alice
          const Botan::ECDH_PrivateKey eph_private_key(Test::rng(), domain, r);
          const Botan::PointGFp eph_public_key_point = eph_private_key.public_point();
-         const std::vector<uint8_t> eph_public_key_bin = Botan::unlock(
-                  Botan::EC2OSP(eph_public_key_point, compression_type));
+         const std::vector<uint8_t> eph_public_key_bin = eph_public_key_point.encode(compression_type);
          result.test_eq("encoded (ephemeral) public key", eph_public_key_bin, c0);
 
          // test secret derivation: ISO 18033 test vectors use KDF1 from ISO 18033
@@ -150,40 +148,33 @@ class ECIES_ISO_Tests final : public Text_Based_Test
          result.test_eq("derived secret key", secret_key.bits_of(), k);
 
          // test encryption / decryption
-         for(int i_cofactor_mode = 0; i_cofactor_mode < 2; ++i_cofactor_mode)
-            {
-            for(int i_single_hash_mode = 0; i_single_hash_mode < 2; ++i_single_hash_mode)
-               {
-               for(int i_old_cofactor_mode = 0; i_old_cofactor_mode < 2; ++i_old_cofactor_mode)
-                  {
-                  for(int i_check_mode = 0; i_check_mode < 2; ++i_check_mode)
-                     {
-                     for(int i_compression_type = 0; i_compression_type < 3; ++i_compression_type)
-                        {
-                        const bool cofactor_mode = i_cofactor_mode != 0;
-                        const bool single_hash_mode = i_single_hash_mode != 0;
-                        const bool old_cofactor_mode = i_old_cofactor_mode != 0;
-                        const bool check_mode = i_check_mode != 0;
-                        const Botan::PointGFp::Compression_Type gen_compression_type =
-                           static_cast<Botan::PointGFp::Compression_Type>(i_compression_type);
 
+         for(auto comp_type : { Botan::PointGFp::UNCOMPRESSED, Botan::PointGFp::COMPRESSED, Botan::PointGFp::HYBRID })
+            {
+            for(bool cofactor_mode : { true, false })
+               {
+               for(bool single_hash_mode : { true, false })
+                  {
+                  for(bool old_cofactor_mode : { true, false })
+                     {
+                     for(bool check_mode : { true, false })
+                        {
                         Flags flags = ecies_flags(cofactor_mode, old_cofactor_mode, check_mode, single_hash_mode);
 
-                        if(cofactor_mode + check_mode + old_cofactor_mode > 1)
+                        if(size_t(cofactor_mode) + size_t(check_mode) + size_t(old_cofactor_mode) > 1)
                            {
                            auto onThrow =  [&]()
                               {
-                              Botan::ECIES_System_Params(
-                                 eph_private_key.domain(),
+                              Botan::ECIES_System_Params(eph_private_key.domain(),
                                  "KDF2(SHA-1)", "AES-256/CBC", 32, "HMAC(SHA-1)", 20,
-                                 gen_compression_type, flags);
+                                 comp_type, flags);
                               };
                            result.test_throws("throw on invalid ECIES_Flags", onThrow);
                            continue;
                            }
 
                         Botan::ECIES_System_Params ecies_params(eph_private_key.domain(), "KDF2(SHA-1)", "AES-256/CBC",
-                                                                32, "HMAC(SHA-1)", 20, gen_compression_type, flags);
+                                                                32, "HMAC(SHA-1)", 20, comp_type, flags);
                         check_encrypt_decrypt(result, eph_private_key, other_private_key, ecies_params, 16);
                         }
                      }

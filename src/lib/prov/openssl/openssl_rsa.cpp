@@ -15,14 +15,15 @@
 #include <botan/internal/pk_ops_impl.h>
 #include <botan/internal/ct_utils.h>
 
-#include <cstdlib>
 #include <functional>
 #include <memory>
+#include <cstdlib>
 
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
 #include <openssl/err.h>
 #include <openssl/rand.h>
+#include <limits.h>
 
 namespace Botan {
 

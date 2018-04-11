@@ -191,6 +191,8 @@ PK_Signature_Verification_Test::run_one_test(const std::string& pad_hdr, const V
    const std::vector<uint8_t> signature = get_req_bin(vars, "Signature");
    const std::string padding = choose_padding(vars, pad_hdr);
 
+   const bool expected_valid = (get_opt_sz(vars, "Valid", 1) == 1);
+
    std::unique_ptr<Botan::Public_Key> pubkey = load_public_key(vars);
 
    Test::Result result(algo_name() + "/" + padding + " signature verification");
@@ -202,12 +204,23 @@ PK_Signature_Verification_Test::run_one_test(const std::string& pad_hdr, const V
       try
          {
          verifier.reset(new Botan::PK_Verifier(*pubkey, padding, Botan::IEEE_1363, verify_provider));
-         result.test_eq("correct signature valid", verifier->verify_message(message, signature), true);
-         check_invalid_signatures(result, *verifier, message, signature);
          }
       catch(Botan::Lookup_Error&)
          {
          result.test_note("Skipping verifying with " + verify_provider);
+         }
+
+      if(verifier)
+         {
+         const bool verified = verifier->verify_message(message, signature);
+
+         if(expected_valid)
+            {
+            result.test_eq("correct signature valid", verified, true);
+            check_invalid_signatures(result, *verifier, message, signature);
+            }
+         else
+            result.test_eq("incorrect signature invalid", verified, false);
          }
       }
 
@@ -250,7 +263,7 @@ PK_Encryption_Decryption_Test::run_one_test(const std::string& pad_hdr, const Va
    const std::vector<uint8_t> ciphertext = get_req_bin(vars, "Ciphertext");
    const std::string padding = choose_padding(vars, pad_hdr);
 
-   Test::Result result(algo_name() + (padding.empty() ? padding : "/" + padding) + " decryption");
+   Test::Result result(algo_name() + (padding.empty() ? padding : "/" + padding) + " encryption");
 
    std::unique_ptr<Botan::Private_Key> privkey = load_private_key(vars);
 
@@ -307,6 +320,21 @@ PK_Encryption_Decryption_Test::run_one_test(const std::string& pad_hdr, const Va
          kat_rng.reset(test_rng(get_req_bin(vars, "Nonce")));
          }
 
+      if(padding == "Raw")
+         {
+         /*
+         Hack for RSA with no padding since sometimes one more bit will fit in but maximum_input_size
+         rounds down to nearest byte
+         */
+         result.test_lte("Input within accepted bounds",
+                         plaintext.size(), encryptor->maximum_input_size() + 1);
+         }
+      else
+         {
+         result.test_lte("Input within accepted bounds",
+                         plaintext.size(), encryptor->maximum_input_size());
+         }
+
       const std::vector<uint8_t> generated_ciphertext =
          encryptor->encrypt(plaintext, kat_rng ? *kat_rng : Test::rng());
 
@@ -324,6 +352,49 @@ PK_Encryption_Decryption_Test::run_one_test(const std::string& pad_hdr, const Va
             }
          }
 
+      }
+
+   return result;
+   }
+
+Test::Result
+PK_Decryption_Test::run_one_test(const std::string& pad_hdr, const VarMap& vars)
+   {
+   const std::vector<uint8_t> plaintext  = get_req_bin(vars, "Msg");
+   const std::vector<uint8_t> ciphertext = get_req_bin(vars, "Ciphertext");
+   const std::string padding = choose_padding(vars, pad_hdr);
+
+   Test::Result result(algo_name() + (padding.empty() ? padding : "/" + padding) + " decryption");
+
+   std::unique_ptr<Botan::Private_Key> privkey = load_private_key(vars);
+
+   std::vector<std::unique_ptr<Botan::PK_Decryptor>> decryptors;
+
+   for(auto const& dec_provider : possible_providers(algo_name()))
+      {
+      std::unique_ptr<Botan::PK_Decryptor> decryptor;
+
+      try
+         {
+         decryptor.reset(new Botan::PK_Decryptor_EME(*privkey, Test::rng(), padding, dec_provider));
+         }
+      catch(Botan::Lookup_Error&)
+         {
+         continue;
+         }
+
+      Botan::secure_vector<uint8_t> decrypted;
+      try
+         {
+         decrypted = decryptor->decrypt(ciphertext);
+         }
+      catch(Botan::Exception& e)
+         {
+         result.test_failure("Failed to decrypt KAT ciphertext", e.what());
+         }
+
+      result.test_eq(dec_provider, "decryption of KAT", decrypted, plaintext);
+      check_invalid_ciphertexts(result, *decryptor, plaintext, ciphertext);
       }
 
    return result;

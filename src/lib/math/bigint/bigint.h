@@ -9,8 +9,8 @@
 #ifndef BOTAN_BIGINT_H_
 #define BOTAN_BIGINT_H_
 
+#include <botan/types.h>
 #include <botan/secmem.h>
-#include <botan/mp_types.h>
 #include <botan/exceptn.h>
 #include <botan/loadstor.h>
 #include <iosfwd>
@@ -74,9 +74,32 @@ class BOTAN_PUBLIC_API(2,0) BigInt final
      * Create a BigInt from an integer in a byte array
      * @param buf the byte array holding the value
      * @param length size of buf
+     */
+     BigInt(const uint8_t buf[], size_t length);
+
+     /**
+     * Create a BigInt from an integer in a byte array
+     * @param buf the byte array holding the value
+     * @param length size of buf
      * @param base is the number base of the integer in buf
      */
-     BigInt(const uint8_t buf[], size_t length, Base base = Binary);
+     BigInt(const uint8_t buf[], size_t length, Base base);
+
+     /**
+     * Create a BigInt from an integer in a byte array
+     * @param buf the byte array holding the value
+     * @param length size of buf
+     * @param max_bits if the resulting integer is more than max_bits,
+     *        it will be shifted so it is at most max_bits in length.
+     */
+     BigInt(const uint8_t buf[], size_t length, size_t max_bits);
+
+     /**
+     * Create a BigInt from an array of words
+     * @param words the words
+     * @param length number of words
+     */
+     BigInt(const word words[], size_t length);
 
      /**
      * \brief Create a random BigInt of the specified size
@@ -154,6 +177,12 @@ class BOTAN_PUBLIC_API(2,0) BigInt final
      BigInt& operator*=(const BigInt& y);
 
      /**
+     * *= operator
+     * @param y the word to multiply with this
+     */
+     BigInt& operator*=(word y);
+
+     /**
      * /= operator
      * @param y the BigInt to divide this by
      */
@@ -214,6 +243,36 @@ class BOTAN_PUBLIC_API(2,0) BigInt final
      * @return true iff this is zero, otherwise false
      */
      bool operator !() const { return (!is_nonzero()); }
+
+     /**
+     * Multiply this with y
+     * @param y the BigInt to multiply with this
+     * @param ws a temp workspace
+     */
+     BigInt& mul(const BigInt& y, secure_vector<word>& ws);
+
+     /**
+     * Square value of *this
+     * @param ws a temp workspace
+     */
+     BigInt& square(secure_vector<word>& ws);
+
+     /**
+     * Set *this to y - *this
+     * @param y the BigInt to subtract from as a sequence of words
+     * @param y_size length of y in words
+     * @param ws a temp workspace
+     */
+     BigInt& rev_sub(const word y[], size_t y_size, secure_vector<word>& ws);
+
+     /**
+     * Return *this below mod
+     *
+     * Assumes that *this is (if anything) only slightly larger than
+     * mod and performs repeated subtractions. It should not be used if
+     * *this is much larger than mod, instead of modulo operator.
+     */
+     void reduce_below(const BigInt& mod, secure_vector<word> &ws);
 
      /**
      * Zeroize the BigInt. The size of the underlying register is not
@@ -342,7 +401,8 @@ class BOTAN_PUBLIC_API(2,0) BigInt final
 
      void set_word_at(size_t i, word w)
         {
-        grow_to(i + 1);
+        if(i >= m_reg.size())
+           grow_to(i + 1);
         m_reg[i] = w;
         }
 
@@ -367,18 +427,32 @@ class BOTAN_PUBLIC_API(2,0) BigInt final
      /**
      * @result the opposite sign of the represented integer value
      */
-     Sign reverse_sign() const;
+     Sign reverse_sign() const
+        {
+        if(sign() == Positive)
+           return Negative;
+        return Positive;
+        }
 
      /**
      * Flip the sign of this BigInt
      */
-     void flip_sign();
+     void flip_sign()
+        {
+        set_sign(reverse_sign());
+        }
 
      /**
      * Set sign of the integer
      * @param sign new Sign to set
      */
-     void set_sign(Sign sign);
+     void set_sign(Sign sign)
+        {
+        if(is_zero())
+           m_signedness = Positive;
+        else
+           m_signedness = sign;
+        }
 
      /**
      * @result absolute (positive) value of this
@@ -438,7 +512,11 @@ class BOTAN_PUBLIC_API(2,0) BigInt final
      */
      void grow_to(size_t n);
 
-     void shrink_to_fit();
+     /**
+     * Resize the vector to the minimum word size to hold the integer, or
+     * min_size words, whichever is larger
+     */
+     void shrink_to_fit(size_t min_size = 0);
 
      /**
      * Fill BigInt with a random number with size of bitsize
@@ -480,6 +558,12 @@ class BOTAN_PUBLIC_API(2,0) BigInt final
      * @return size of this integer in base base
      */
      size_t encoded_size(Base base = Binary) const;
+
+     /**
+     * Place the value into out, zero-padding up to size words
+     * Throw if *this cannot be represented in size words
+     */
+     void encode_words(word out[], size_t size) const;
 
      /**
      * @param rng a random number generator

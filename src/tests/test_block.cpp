@@ -5,6 +5,9 @@
 */
 
 #include "tests.h"
+
+#if defined(BOTAN_HAS_BLOCK_CIPHER)
+
 #include <botan/block_cipher.h>
 
 namespace Botan_Tests {
@@ -53,8 +56,31 @@ class Block_Cipher_Tests final : public Text_Based_Test
             result.test_gte(provider, cipher->block_size(), 8);
             result.test_gte(provider, cipher->parallel_bytes(), cipher->block_size() * cipher->parallelism());
 
+            // Test that trying to encrypt or decrypt with now key set throws Botan::Invalid_State
+            try
+               {
+               std::vector<uint8_t> block(cipher->block_size());
+               cipher->encrypt(block);
+               result.test_failure("Was able to encrypt without a key being set");
+               }
+            catch(Botan::Invalid_State&)
+               {
+               result.test_success("Trying to encrypt with no key set fails");
+               }
+
+            try
+               {
+               std::vector<uint8_t> block(cipher->block_size());
+               cipher->decrypt(block);
+               result.test_failure("Was able to decrypt without a key being set");
+               }
+            catch(Botan::Invalid_State&)
+               {
+               result.test_success("Trying to encrypt with no key set fails");
+               }
+
             // Test to make sure clear() resets what we need it to
-            cipher->set_key(Test::rng().random_vec(cipher->key_spec().minimum_keylength()));
+            cipher->set_key(Test::rng().random_vec(cipher->key_spec().maximum_keylength()));
             Botan::secure_vector<uint8_t> garbage = Test::rng().random_vec(cipher->block_size());
             cipher->encrypt(garbage);
             cipher->clear();
@@ -85,9 +111,57 @@ class Block_Cipher_Tests final : public Text_Based_Test
                cipher->decrypt(buf);
                }
 
+            result.test_eq(provider, "decrypt", buf, input);
+
+            // Now test misaligned buffers
+            const size_t blocks = input.size() / cipher->block_size();
+            buf.resize(input.size() + 1);
+            std::memcpy(buf.data() + 1, input.data(), input.size());
+
+            for(size_t i = 0; i != iterations; ++i)
+               {
+               cipher->encrypt_n(buf.data() + 1, buf.data() + 1, blocks);
+               }
+
+            result.test_eq(provider.c_str(), "encrypt misaligned",
+                           buf.data() + 1, buf.size() - 1,
+                           expected.data(), expected.size());
+
+            // always decrypt expected ciphertext vs what we produced above
+            std::memcpy(buf.data() + 1, expected.data(), expected.size());
+
+            for(size_t i = 0; i != iterations; ++i)
+               {
+               cipher->decrypt_n(buf.data() + 1, buf.data() + 1, blocks);
+               }
+
+            result.test_eq(provider.c_str(), "decrypt misaligned",
+                           buf.data() + 1, buf.size() - 1,
+                           input.data(), input.size());
+
             cipher->clear();
 
-            result.test_eq(provider, "decrypt", buf, input);
+            try
+               {
+               std::vector<uint8_t> block(cipher->block_size());
+               cipher->encrypt(block);
+               result.test_failure("Was able to encrypt without a key being set");
+               }
+            catch(Botan::Invalid_State&)
+               {
+               result.test_success("Trying to encrypt with no key set (after clear) fails");
+               }
+
+            try
+               {
+               std::vector<uint8_t> block(cipher->block_size());
+               cipher->decrypt(block);
+               result.test_failure("Was able to decrypt without a key being set");
+               }
+            catch(Botan::Invalid_State&)
+               {
+               result.test_success("Trying to decrypt with no key set (after clear) fails");
+               }
 
             }
 
@@ -99,3 +173,5 @@ class Block_Cipher_Tests final : public Text_Based_Test
 BOTAN_REGISTER_TEST("block", Block_Cipher_Tests);
 
 }
+
+#endif

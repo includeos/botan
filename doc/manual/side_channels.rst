@@ -13,12 +13,16 @@ RSA
 ----------------------
 
 Blinding is always used to protect private key operations (there is no way to
-turn it off). As an optimization, instead of choosing a new random mask and
+turn it off). Both base blinding and exponent blinding are used.
+
+For base blinding, as an optimization, instead of choosing a new random mask and
 inverse with each decryption, both the mask and its inverse are simply squared
 to choose the next blinding factor. This is much faster than computing a fresh
 value each time, and the additional relation is thought to provide only minimal
 useful information for an attacker. Every BOTAN_BLINDING_REINIT_INTERVAL
 (default 32) operations, a new starting point is chosen.
+
+Exponent blinding uses new values for each signature.
 
 RSA signing uses the CRT optimization, which is much faster but vulnerable to
 trivial fault attacks [RsaFault] which can result in the key being entirely
@@ -104,12 +108,9 @@ See eme_oaep.cpp.
 Modular Exponentiation
 ------------------------
 
-Modular exponentiation uses a fixed window algorithm with Montgomery representation.
-In the current code, information about the exponent is leaked through the
-sequence of memory indexes; we currently rely on randomized blinding at higher
-levels of the cryptographic stack to hide this. A future project would be to
-change this to use either Montgomery ladder or use a side channel silent table
-lookup. See powm_mnt.cpp.
+Modular exponentiation uses a fixed window algorithm with Montgomery
+representation. A side channel silent table lookup is used to access the
+precomputed powers. See powm_mnt.cpp.
 
 The Karatsuba multiplication algorithm has some conditional branches that
 probably expose information through the branch predictor, but probably? does not
@@ -131,16 +132,20 @@ protocols ([InvalidCurve] [InvalidCurveTLS]). See point_gfp.cpp.
 ECC scalar multiply
 ----------------------
 
-There are two implementations of scalar multiply, PointGFp::operator* and the
-class Blinded_Point_Multiply. The default scalar multiply uses the Montgomery
-ladder. However it currently leaks the size of the scalar, because the loop
-iterations are bounded by the scalar size.
+There are several different implementations of ECC scalar multiplications which
+depend on the API invoked. This include ``PointGFp::operator*``,
+``EC_Group::blinded_base_point_multiply`` and
+``EC_Group::blinded_var_point_multiply``.
 
-Blinded_Point_Multiply (used by ECDH, ECDSA, etc) applies several additional
-side channel countermeasures. The scalar is masked by a small multiple of the
-group order (this is commonly called Coron's first countermeasure [CoronDpa]),
-the size of the scalar mask is currently controlled by build.h value
-BOTAN_POINTGFP_SCALAR_BLINDING_BITS which defaults to 20 bits.
+The ``PointGFp::operator*`` implementation uses the Montgomery ladder, which is
+fairly resistant to side channels. However it leaks the size of the scalar,
+because the loop iterations are bounded by the scalar size. It should not be
+used in cases when the scalar is a secret.
+
+Both ``blinded_base_point_multiply`` and ``blinded_var_point_multiply`` apply
+side channel countermeasures. The scalar is masked by a multiple of the group
+order (this is commonly called Coron's first countermeasure [CoronDpa]),
+currently the multiplier is an 80 bit integer.
 
 Botan stores all ECC points in Jacobian representation. This form allows faster
 computation by representing points (x,y) as (X,Y,Z) where x=X/Z^2 and
@@ -150,16 +155,17 @@ attacker from mounting attacks based on the input point remaining unchanged over
 multiple executions. This is commonly called Coron's third countermeasure, see
 again [CoronDpa].
 
-Currently Blinded_Point_Multiply uses one of two different algorithms, depending
-on a build-time flag. If BOTAN_POINTGFP_BLINDED_MULTIPLY_USE_MONTGOMERY_LADDER
-is set in build.h (default is for it *not* to be set), then a randomized
-Montgomery ladder algorithm from [RandomMonty] is used. Otherwise, a simple
-fixed window exponentiation is used; the current version leaks exponent bits
-through memory index values. We rely on scalar blinding to reduce this
-leakage. It would obviously be better for Blinded_Point_Multiply to converge on
-a single side channel silent algorithm.
+The base point multiplication algorithm is a comb-like technique which
+precomputes ``P^i,(2*P)^i,(3*P)^i`` for all ``i`` in the range of valid scalars.
+This means the scalar multiplication involves only point additions and no
+doublings, which may help against attacks which rely on distinguishing between
+point doublings and point additions.
 
-See point_gfp.cpp.
+The variable point multiplication algorithm uses a simple fixed-window
+exponentiation algorithm. Since this is normally invoked using untrusted points
+(eg in ECDH key exchange) it randomizes all inputs.
+
+See point_gfp.cpp and point_mul.cpp
 
 ECDH
 ----------------------
@@ -180,7 +186,7 @@ are performed using a constant time algorithm due to Niels Möller.
 x25519
 ----------------------
 
-The x25519 code is independent of the main Weiserstrass form ECC code, instead
+The x25519 code is independent of the main Weierstrass form ECC code, instead
 based on curve25519-donna-c64.c by Adam Langley. The code seems immune to cache
 based side channels. It does make use of integer multiplications; on some old
 CPUs these multiplications take variable time and might allow a side channel
@@ -213,9 +219,9 @@ bytes runs in constant time, depending only on the block size of the cipher.
 AES
 ----------------------
 
-On x86 processors which support it, AES-NI instruction set is used, as it is
-fast and (presumed) side channel silent. There is no support at the moment for
-the similar ARMv8 or POWER AES instructions; patches would be welcome.
+Some x86, ARMv8 and POWER processors support AES instructions which
+are fast and are thought to be side channel silent. These instructions
+are used when available.
 
 On x86 processors without AES-NI but with SSSE3 (which includes older Intel
 Atoms and Core2 Duos, and even now some embedded or low power x86 chips), a
@@ -224,14 +230,14 @@ It is based on code by Mike Hamburg [VectorAes], see aes_ssse3.cpp. This same
 technique could be applied with NEON or AltiVec, and the paper suggests some
 optimizations for the AltiVec shuffle.
 
-On all other processors, a class 4K table lookup version based on the original
-Rijndael code is used. This approach relatively fast, but now known to be very
-vulnerable to side channels. The implementation does make modifications in the
-first and last rounds to reduce the cache signature, but these merely increase
-the number of observations required. See [AesCacheColl] for one paper which
-analyzes a number of implementations including Botan. Botan already follows both
-of their suggested countermeasures, which increased the number of samples
-required from 2**13 to the only slightly less pitiful 2**19 samples.
+On all other processors, a table lookup version derived from the original
+Rijndael code is used. This approach is relatively fast, but now known to be
+very vulnerable to side channels. To reduce the side channel signature, it uses
+only a 1K table (instead of 4 1K tables which is typical) and uses small tables
+in the first and last rounds. See [AesCacheColl] for one paper which analyzes a
+number of implementations including (an older version of) Botan. Botan already
+follows both of their suggested countermeasures, which increased the number of
+samples required from 2**13 to the only slightly less pitiful 2**19 samples.
 
 The Botan block cipher API already supports bitslicing implementations, so a
 const time 8x bitsliced AES could be integrated fairly easily.
@@ -239,13 +245,11 @@ const time 8x bitsliced AES could be integrated fairly easily.
 GCM
 ---------------------
 
-On x86 platforms which support the clmul instruction, GCM support is fast and
-constant time.
+On platforms that support a carryless multiply instruction (ARMv8 and recent x86),
+GCM is fast and constant time.
 
-On all other platforms, GCM is slow and constant time. It uses a simple bit at
-at time loop. It would be much faster using a table lookup, but we wish to avoid
-side channels. One improvement here would be the option of using a 2K or 4K
-table, but using a side-channel silent (masked) table lookup.
+On all other platforms, GCM uses a slow but constant time algorithm. There is
+also an SSSE3 variant of the same (still relatively slow) algorithm.
 
 OCB
 -----------------------
@@ -358,25 +362,25 @@ References
 
 [CoronDpa] Coron,
 "Resistance against Differential Power Analysis for Elliptic Curve Cryptosystems"
-(http://citeseer.ist.psu.edu/viewdoc/summary?doi=10.1.1.1.5695)
+(https://citeseer.ist.psu.edu/viewdoc/summary?doi=10.1.1.1.5695)
 
 [InvalidCurve] Biehl, Meyer, Müller: Differential fault attacks on
 elliptic curve cryptosystems
-(http://www.iacr.org/archive/crypto2000/18800131/18800131.pdf)
+(https://www.iacr.org/archive/crypto2000/18800131/18800131.pdf)
 
 [InvalidCurveTLS] Jager, Schwenk, Somorovsky: Practical Invalid Curve
 Attacks on TLS-ECDH
 (https://www.nds.rub.de/research/publications/ESORICS15/)
 
 [SafeCurves] Bernstein, Lange: SafeCurves: choosing safe curves for
-elliptic-curve cryptography. (http://safecurves.cr.yp.to)
+elliptic-curve cryptography. (https://safecurves.cr.yp.to)
 
 [Lucky13] AlFardan, Paterson "Lucky Thirteen: Breaking the TLS and DTLS Record Protocols"
 (http://www.isg.rhul.ac.uk/tls/TLStiming.pdf)
 
 [MillionMsg] Bleichenbacher "Chosen Ciphertext Attacks Against Protocols Based
 on the RSA Encryption Standard PKCS1"
-(http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.19.8543)
+(https://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.19.8543)
 
 [MillionMsgTiming] Meyer, Somorovsky, Weiss, Schwenk, Schinzel, Tews: Revisiting
 SSL/TLS Implementations: New Bleichenbacher Side Channels and Attacks
@@ -388,7 +392,7 @@ Encryption Padding (OAEP) as Standardized in PKCS #1 v2.0"
 
 [RsaFault] Boneh, Demillo, Lipton
 "On the importance of checking cryptographic protocols for faults"
-(http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.48.9764)
+(https://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.48.9764)
 
 [RandomMonty] Le, Tan, Tunstall "Randomizing the Montgomery Powering Ladder"
 (https://eprint.iacr.org/2015/657)

@@ -159,6 +159,11 @@ void Test::Result::test_failure(const std::string& what, const uint8_t buf[], si
 bool Test::Result::test_failure(const std::string& err)
    {
    m_fail_log.push_back(err);
+
+   if(m_who != "Failing Test" && Test::abort_on_first_fail())
+      {
+      std::abort();
+      }
    return false;
    }
 
@@ -458,22 +463,6 @@ std::string Test::Result::result_string(bool verbose) const
    return report.str();
    }
 
-std::vector<std::string> Provider_Filter::filter(const std::vector<std::string>& in) const
-   {
-   if(m_provider.empty())
-      {
-      return in;
-      }
-   for(auto&& provider : in)
-      {
-      if(provider == m_provider)
-         {
-         return std::vector<std::string> { provider };
-         }
-      }
-   return std::vector<std::string> {};
-   }
-
 // static Test:: functions
 //static
 std::map<std::string, std::unique_ptr<Test>>& Test::global_registry()
@@ -506,69 +495,62 @@ Test* Test::get_test(const std::string& test_name)
    return nullptr;
    }
 
-//static
-std::vector<Test::Result> Test::run_test(const std::string& test_name, bool fail_if_missing)
+std::string Test::read_data_file(const std::string& path)
    {
-   std::vector<Test::Result> results;
-
-   try
+   const std::string fsname = Test::data_file(path);
+   std::ifstream file(fsname.c_str());
+   if(!file.good())
       {
-      if(Test* test = get_test(test_name))
-         {
-         std::vector<Test::Result> test_results = test->run();
-         results.insert(results.end(), test_results.begin(), test_results.end());
-         }
-      else
-         {
-         Test::Result result(test_name);
-         if(fail_if_missing)
-            {
-            result.test_failure("Test missing or unavailable");
-            }
-         else
-            {
-            result.test_note("Test missing or unavailable");
-            }
-         results.push_back(result);
-         }
-      }
-   catch(std::exception& e)
-      {
-      results.push_back(Test::Result::Failure(test_name, e.what()));
-      }
-   catch(...)
-      {
-      results.push_back(Test::Result::Failure(test_name, "unknown exception"));
+      throw Test_Error("Error reading from " + fsname);
       }
 
-   return results;
+   return std::string((std::istreambuf_iterator<char>(file)),
+                      std::istreambuf_iterator<char>());
+   }
+
+std::vector<uint8_t> Test::read_binary_data_file(const std::string& path)
+   {
+   const std::string fsname = Test::data_file(path);
+   std::ifstream file(fsname.c_str(), std::ios::binary);
+   if(!file.good())
+      {
+      throw Test_Error("Error reading from " + fsname);
+      }
+
+   std::vector<uint8_t> contents;
+
+   while(file.good())
+      {
+      std::vector<uint8_t> buf(4096);
+      file.read(reinterpret_cast<char*>(buf.data()), buf.size());
+      size_t got = file.gcount();
+
+      if(got == 0 && file.eof())
+         {
+         break;
+         }
+
+      contents.insert(contents.end(), buf.data(), buf.data() + got);
+      }
+
+   return contents;
    }
 
 // static member variables of Test
-Botan::RandomNumberGenerator* Test::m_test_rng = nullptr;
-std::string Test::m_data_dir;
-bool Test::m_log_success = false;
-bool Test::m_run_online_tests = false;
-bool Test::m_run_long_tests = false;
-std::string Test::m_pkcs11_lib;
-Botan_Tests::Provider_Filter Test::m_provider_filter;
+
+Test_Options Test::m_opts;
+std::unique_ptr<Botan::RandomNumberGenerator> Test::m_test_rng;
 
 //static
-void Test::setup_tests(bool log_success,
-                       bool run_online,
-                       bool run_long,
-                       const std::string& data_dir,
-                       const std::string& pkcs11_lib,
-                       const Botan_Tests::Provider_Filter& pf,
-                       Botan::RandomNumberGenerator* rng)
+void Test::set_test_options(const Test_Options& opts)
    {
-   m_data_dir = data_dir;
-   m_log_success = log_success;
-   m_run_online_tests = run_online;
-   m_run_long_tests = run_long;
-   m_test_rng = rng;
-   m_pkcs11_lib = pkcs11_lib;
-   m_provider_filter = pf;
+   m_opts = opts;
+   }
+
+//static
+void Test::set_test_rng(std::unique_ptr<Botan::RandomNumberGenerator> rng)
+   {
+   m_test_rng.reset(rng.release());
    }
 
 //static
@@ -578,39 +560,20 @@ std::string Test::data_file(const std::string& what)
    }
 
 //static
-const std::string& Test::data_dir()
-   {
-   return m_data_dir;
-   }
-
-//static
-bool Test::log_success()
-   {
-   return m_log_success;
-   }
-
-//static
-bool Test::run_online_tests()
-   {
-   return m_run_online_tests;
-   }
-
-//static
-bool Test::run_long_tests()
-   {
-   return m_run_long_tests;
-   }
-
-//static
-std::string Test::pkcs11_lib()
-   {
-   return m_pkcs11_lib;
-   }
-
-//static
 std::vector<std::string> Test::provider_filter(const std::vector<std::string>& in)
    {
-   return m_provider_filter.filter(in);
+   if(m_opts.provider().empty())
+      {
+      return in;
+      }
+   for(auto&& provider : in)
+      {
+      if(provider == m_opts.provider())
+         {
+         return std::vector<std::string> { provider };
+         }
+      }
+   return std::vector<std::string> {};
    }
 
 //static
@@ -618,7 +581,7 @@ Botan::RandomNumberGenerator& Test::rng()
    {
    if(!m_test_rng)
       {
-      throw Test_Error("No usable RNG in build, and this test requires an RNG");
+      throw Test_Error("Test requires RNG but no RNG set with Test::set_test_rng");
       }
    return *m_test_rng;
    }
@@ -1046,6 +1009,8 @@ std::vector<Test::Result> Text_Based_Test::run()
       results.push_back(Test::Result::Failure(header_or_name,
                                               "run_final_tests exception " + std::string(e.what())));
       }
+
+   m_first = true;
 
    return results;
    }

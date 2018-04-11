@@ -11,6 +11,7 @@
    #include <botan/numthry.h>
    #include <botan/pow_mod.h>
    #include <botan/parsing.h>
+   #include "test_rng.h"
 #endif
 
 namespace Botan_Tests {
@@ -87,11 +88,15 @@ class BigInt_Unit_Tests final : public Test
          {
          Test::Result result("BigInt prime generation");
 
-         result.test_throws("Invalid arg", []() { Botan::random_prime(Test::rng(), 0); });
-         result.test_throws("Invalid arg", []() { Botan::random_prime(Test::rng(), 1); });
-         result.test_throws("Invalid arg", []() { Botan::random_prime(Test::rng(), 2, 0); });
-         result.test_throws("Invalid arg", []() { Botan::random_prime(Test::rng(), 2, 1, 1, 3); });
-         result.test_throws("Invalid arg", []() { Botan::random_prime(Test::rng(), 2, 1, 0, 2); });
+         result.test_throws("Invalid bit size",
+                            "Invalid argument random_prime: Can't make a prime of 0 bits",
+                            []() { Botan::random_prime(Test::rng(), 0); });
+         result.test_throws("Invalid bit size",
+                            "Invalid argument random_prime: Can't make a prime of 1 bits",
+                            []() { Botan::random_prime(Test::rng(), 1); });
+         result.test_throws("Invalid arg",
+                            "Invalid argument random_prime Invalid value for equiv/modulo",
+                            []() { Botan::random_prime(Test::rng(), 2, 1, 0, 2); });
 
          BigInt p = Botan::random_prime(Test::rng(), 2);
          result.confirm("Only two 2-bit primes", p == 2 || p == 3);
@@ -134,54 +139,39 @@ class BigInt_Unit_Tests final : public Test
 
          result.start_timer();
 
-         // A value of 500 caused a non-negligible amount of test failures
-         const size_t ITERATIONS_PER_POSSIBLE_VALUE = 750;
+         const size_t SAMPLES = 500000;
 
-         std::vector<size_t> min_ranges{ 0 };
-         std::vector<size_t> max_ranges{ 10 };
+         const uint64_t range_min = 0;
+         const uint64_t range_max = 100;
 
-         if(Test::run_long_tests())
+         /*
+         * We have a range of 0...100 thus 100 degrees of freedom.
+         * This bound is 99.9% probability of non-uniform
+         */
+         const double CHI_CRIT = 148.230;
+
+         std::map<uint32_t, size_t> counts;
+
+         for(size_t i = 0; i != SAMPLES; ++i)
             {
-            // This gets slow quickly:
-            min_ranges.push_back(7);
-            max_ranges.push_back(113);
+            uint32_t r = BigInt::random_integer(Test::rng(), range_min, range_max).to_u32bit();
+            counts[r] += 1;
             }
 
-         for(size_t range_min : min_ranges)
+         // Chi-square test
+         const double expected = static_cast<double>(SAMPLES) / (range_max - range_min);
+         double chi2 = 0;
+
+         for(auto sample : counts)
             {
-            for(size_t range_max : max_ranges)
-               {
-               if(range_min >= range_max)
-                  {
-                  continue;
-                  }
-
-               std::vector<size_t> counts(range_max - range_min);
-
-               for(size_t i = 0; i != counts.size() * ITERATIONS_PER_POSSIBLE_VALUE; ++i)
-                  {
-                  uint32_t r = BigInt::random_integer(Test::rng(), range_min, range_max).to_u32bit();
-                  result.test_gte("random_integer", r, range_min);
-                  result.test_lt("random_integer", r, range_max);
-                  counts[r - range_min] += 1;
-                  }
-
-               for(const auto count : counts)
-                  {
-                  double ratio = static_cast<double>(count) / ITERATIONS_PER_POSSIBLE_VALUE;
-
-                  if(ratio >= 0.85 && ratio <= 1.15) // +/-15 %
-                     {
-                     result.test_success("distribution within expected range");
-                     }
-                  else
-                     {
-                     result.test_failure("distribution ratio outside expected range (+/-15 %): " +
-                                         std::to_string(ratio));
-                     }
-                  }
-               }
+            const double count = sample.second;
+            chi2 += ((count - expected)*(count - expected)) / expected;
             }
+
+         if(chi2 >= CHI_CRIT)
+            result.test_failure("Failed Chi-square test, value " + std::to_string(chi2));
+         else
+            result.test_success("Passed Chi-square test, value " + std::to_string(chi2));
 
          result.end_timer();
 
@@ -613,7 +603,7 @@ class BigInt_InvMod_Test final : public Text_Based_Test
          const Botan::BigInt mod = get_req_bn(vars, "Modulus");
          const Botan::BigInt expected = get_req_bn(vars, "Output");
 
-         const Botan::BigInt a_inv = Botan::inverse_mod(a, mod);
+         const Botan::BigInt a_inv = Botan::inverse_euclid(a, mod);
 
          result.test_eq("inverse_mod", a_inv, expected);
 
@@ -622,7 +612,7 @@ class BigInt_InvMod_Test final : public Text_Based_Test
             result.test_eq("inverse ok", (a * a_inv) % mod, 1);
             }
 
-         if(mod.is_odd())
+         if(mod.is_odd() && a < mod)
             {
             result.test_eq("ct_inverse_odd_modulus",
                            ct_inverse_mod_odd_modulus(a, mod),
@@ -641,6 +631,31 @@ class BigInt_InvMod_Test final : public Text_Based_Test
    };
 
 BOTAN_REGISTER_TEST("bn_invmod", BigInt_InvMod_Test);
+
+class BigInt_Rand_Test final : public Text_Based_Test
+   {
+   public:
+      BigInt_Rand_Test() : Text_Based_Test("bn/random.vec", "Seed,Min,Max,Output") {}
+
+      Test::Result run_one_test(const std::string&, const VarMap& vars) override
+         {
+         Test::Result result("BigInt Random");
+
+         const std::vector<uint8_t> seed = get_req_bin(vars, "Seed");
+         const Botan::BigInt min = get_req_bn(vars, "Min");
+         const Botan::BigInt max = get_req_bn(vars, "Max");
+         const Botan::BigInt expected = get_req_bn(vars, "Output");
+
+         Fixed_Output_RNG rng(seed);
+         Botan::BigInt generated = BigInt::random_integer(rng, min, max);
+
+         result.test_eq("random_integer KAT", generated, expected);
+
+         return result;
+         }
+   };
+
+BOTAN_REGISTER_TEST("bn_rand", BigInt_Rand_Test);
 
 class DSA_ParamGen_Test final : public Text_Based_Test
    {
