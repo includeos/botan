@@ -30,6 +30,7 @@ Contents
    psk_db
    filters
    fpe
+   ecc
    compression
    pkcs11
    tpm
@@ -42,3 +43,4 @@ Contents
    fuzzing
    deprecated
    abi
+   roadmap

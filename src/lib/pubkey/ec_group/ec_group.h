@@ -199,9 +199,24 @@ class BOTAN_PUBLIC_API(2,0) EC_Group final
       BigInt mod_order(const BigInt& x) const;
 
       /*
+      * Return inverse of x modulo the order
+      */
+      BigInt inverse_mod_order(const BigInt& x) const;
+
+      /*
+      * Reduce (x*x) modulo the order
+      */
+      BigInt square_mod_order(const BigInt& x) const;
+
+      /*
       * Reduce (x*y) modulo the order
       */
       BigInt multiply_mod_order(const BigInt& x, const BigInt& y) const;
+
+      /*
+      * Reduce (x*y*z) modulo the order
+      */
+      BigInt multiply_mod_order(const BigInt& x, const BigInt& y, const BigInt& z) const;
 
       /**
       * Return the cofactor

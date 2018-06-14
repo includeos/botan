@@ -17,6 +17,8 @@ shared_flags "-fPIC"
 coverage_flags "--coverage"
 stack_protector_flags "-fstack-protector"
 
+add_sysroot_option "--sysroot="
+
 <sanitizers>
 default   -> iterator,address
 
@@ -53,7 +55,7 @@ ssse3   -> "-mssse3"
 sse41   -> "-msse4.1"
 sse42   -> "-msse4.2"
 avx2    -> "-mavx2"
-bmi2    -> "-mbmi2"
+bmi2    -> "-mbmi -mbmi2"
 aesni   -> "-maes -mpclmul -mssse3"
 rdrand  -> "-mrdrnd"
 rdseed	-> "-mrdseed"

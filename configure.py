@@ -3,7 +3,7 @@
 """
 Configuration program for botan
 
-(C) 2009,2010,2011,2012,2013,2014,2015,2016,2017 Jack Lloyd
+(C) 2009,2010,2011,2012,2013,2014,2015,2016,2017,2018 Jack Lloyd
 (C) 2015,2016,2017 Simon Warta (Kullo GmbH)
 
 Botan is released under the Simplified BSD License (see license.txt)
@@ -411,6 +411,9 @@ def process_command_line(args): # pylint: disable=too-many-locals
     build_group.add_option('--with-external-libdir', metavar='DIR', default='',
                            help='use DIR for external libs')
 
+    build_group.add_option('--with-sysroot-dir', metavar='DIR', default='',
+                           help='use DIR for system root while cross-compiling')
+
     build_group.add_option('--with-openmp', default=False, action='store_true',
                            help='enable use of OpenMP')
 
@@ -459,6 +462,12 @@ def process_command_line(args): # pylint: disable=too-many-locals
 
     build_group.add_option('--with-fuzzer-lib', metavar='LIB', default=None, dest='fuzzer_lib',
                            help='additionally link in LIB')
+
+    build_group.add_option('--test-mode', action='store_true', default=False,
+                           help=optparse.SUPPRESS_HELP)
+
+    build_group.add_option('--with-debug-asserts', action='store_true', default=False,
+                           help=optparse.SUPPRESS_HELP)
 
     docs_group = optparse.OptionGroup(parser, 'Documentation Options')
 
@@ -677,7 +686,7 @@ def lex_me_harder(infofile, allowed_groups, allowed_maps, name_val_pairs):
     for (key, val) in name_val_pairs.items():
         out.__dict__[key] = val
 
-    def lexed_tokens(): # Convert to an interator
+    def lexed_tokens(): # Convert to an iterator
         while True:
             token = lexer.get_token()
             if token != lexer.eof:
@@ -1055,6 +1064,7 @@ class CompilerInfo(InfoObject): # pylint: disable=too-many-instance-attributes
                 'output_to_exe': '-o ',
                 'add_include_dir_option': '-I',
                 'add_lib_dir_option': '-L',
+                'add_sysroot_option': '',
                 'add_lib_option': '-l',
                 'add_framework_option': '-framework ',
                 'preproc_flags': '-E',
@@ -1080,6 +1090,7 @@ class CompilerInfo(InfoObject): # pylint: disable=too-many-instance-attributes
         self.add_include_dir_option = lex.add_include_dir_option
         self.add_lib_dir_option = lex.add_lib_dir_option
         self.add_lib_option = lex.add_lib_option
+        self.add_sysroot_option = lex.add_sysroot_option
         self.ar_command = lex.ar_command
         self.ar_options = lex.ar_options
         self.ar_output_to = lex.ar_output_to
@@ -1756,6 +1767,13 @@ def create_template_vars(source_paths, build_paths, options, modules, cc, arch, 
     def cmake_escape(s):
         return s.replace('(', '\\(').replace(')', '\\)')
 
+    def sysroot_option():
+        if options.with_sysroot_dir == '':
+            return ''
+        if cc.add_sysroot_option == '':
+            logging.error("This compiler doesn't support --sysroot option")
+        return cc.add_sysroot_option + options.with_sysroot_dir
+
     def ar_command():
         if options.ar_command:
             return options.ar_command
@@ -1788,6 +1806,11 @@ def create_template_vars(source_paths, build_paths, options, modules, cc, arch, 
         if build_dir == os.path.curdir and options.os == 'mingw':
             return path
         return os.path.join(build_dir, path)
+
+    def shared_lib_uses_symlinks():
+        if options.os in ['windows', 'openbsd']:
+            return False
+        return True
 
     variables = {
         'version_major':  Version.major(),
@@ -1848,11 +1871,13 @@ def create_template_vars(source_paths, build_paths, options, modules, cc, arch, 
         'makefile_path': os.path.join(build_paths.build_dir, '..', 'Makefile'),
 
         'build_static_lib': options.build_static_lib,
+        'build_shared_lib': options.build_shared_lib,
+
         'build_fuzzers': options.build_fuzzers,
 
-        'build_shared_lib': options.build_shared_lib,
-        'build_unix_shared_lib': options.build_shared_lib and options.compiler != 'msvc',
-        'build_msvc_shared_lib': options.build_shared_lib and options.compiler == 'msvc',
+        'build_coverage' : options.with_coverage_info or options.with_coverage,
+
+        'symlink_shared_lib': options.build_shared_lib and shared_lib_uses_symlinks(),
 
         'libobj_dir': build_paths.libobj_dir,
         'cliobj_dir': build_paths.cliobj_dir,
@@ -1897,6 +1922,7 @@ def create_template_vars(source_paths, build_paths, options, modules, cc, arch, 
         'dash_c': cc.compile_flags,
 
         'cc_lang_flags': cc.cc_lang_flags(),
+        'cc_sysroot': sysroot_option(),
         'cc_compile_flags': options.cxxflags or cc.cc_compile_flags(options),
         'ldflags': options.ldflags or '',
         'cc_warning_flags': cc.cc_warning_flags(options),
@@ -1940,7 +1966,8 @@ def create_template_vars(source_paths, build_paths, options, modules, cc, arch, 
 
         'with_valgrind': options.with_valgrind,
         'with_openmp': options.with_openmp,
-        'with_debug_asserts': options.debug_mode,
+        'with_debug_asserts': options.with_debug_asserts,
+        'test_mode': options.test_mode,
 
         'mod_list': sorted([m.basename for m in modules])
         }
@@ -2150,7 +2177,7 @@ class ModulesChooser(object):
         successfully_loaded = set()
 
         for modname in self._to_load:
-            # This will try to recusively load all dependencies of modname
+            # This will try to recursively load all dependencies of modname
             ok, modules = self.resolve_dependencies(available_modules, dependency_table, modname)
             if ok:
                 successfully_loaded.add(modname)
@@ -2898,8 +2925,14 @@ def calculate_cc_min_version(options, ccinfo, source_paths):
             ccinfo.basename, cc_output))
         return "0.0"
 
-    cc_version = "%d.%d" % (int(match.group(1), 0), int(match.group(2), 0))
+    major_version = int(match.group(1), 0)
+    minor_version = int(match.group(2), 0)
+    cc_version = "%d.%d" % (major_version, minor_version)
     logging.info('Auto-detected compiler version %s' % (cc_version))
+
+    if ccinfo.basename == 'msvc':
+        if major_version == 18:
+            logging.warning('MSVC 2013 support is deprecated and will be removed in a future release')
     return cc_version
 
 def check_compiler_arch(options, ccinfo, archinfo, source_paths):

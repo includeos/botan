@@ -240,7 +240,7 @@ DL_Group::DL_Group(RandomNumberGenerator& rng,
       Modular_Reducer mod_2q(2*q);
       BigInt X;
       BigInt p;
-      while(p.bits() != pbits || !is_prime(p, rng))
+      while(p.bits() != pbits || !is_prime(p, rng, 128, true))
          {
          X.randomize(rng, pbits);
          p = X - mod_2q.reduce(X) + 1;
@@ -457,37 +457,36 @@ std::vector<uint8_t> DL_Group::DER_encode(Format format) const
    if(get_q().is_zero() && (format == ANSI_X9_57 || format == ANSI_X9_42))
       throw Encoding_Error("Cannot encode DL_Group in ANSI formats when q param is missing");
 
+   std::vector<uint8_t> output;
+   DER_Encoder der(output);
+
    if(format == ANSI_X9_57)
       {
-      return DER_Encoder()
-         .start_cons(SEQUENCE)
+      der.start_cons(SEQUENCE)
             .encode(get_p())
             .encode(get_q())
             .encode(get_g())
-         .end_cons()
-      .get_contents_unlocked();
+         .end_cons();
       }
    else if(format == ANSI_X9_42)
       {
-      return DER_Encoder()
-         .start_cons(SEQUENCE)
+      der.start_cons(SEQUENCE)
             .encode(get_p())
             .encode(get_g())
             .encode(get_q())
-         .end_cons()
-      .get_contents_unlocked();
+         .end_cons();
       }
    else if(format == PKCS_3)
       {
-      return DER_Encoder()
-         .start_cons(SEQUENCE)
+      der.start_cons(SEQUENCE)
             .encode(get_p())
             .encode(get_g())
-         .end_cons()
-      .get_contents_unlocked();
+         .end_cons();
       }
+   else
+      throw Invalid_Argument("Unknown DL_Group encoding " + std::to_string(format));
 
-   throw Invalid_Argument("Unknown DL_Group encoding " + std::to_string(format));
+   return output;
    }
 
 /*

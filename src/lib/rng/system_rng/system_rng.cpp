@@ -13,6 +13,9 @@
   #define _WINSOCKAPI_ // stop windows.h including winsock.h
   #include <windows.h>
 
+#elif defined(BOTAN_TARGET_OS_HAS_CRYPTO_NG)
+   #include <bcrypt.h>
+
 #elif defined(BOTAN_TARGET_OS_HAS_ARC4RANDOM)
    #include <stdlib.h>
 
@@ -36,12 +39,13 @@ class System_RNG_Impl final : public RandomNumberGenerator
       System_RNG_Impl() : m_advapi("advapi32.dll")
          {
          // This throws if the function is not found
-         m_rtlgenrandom = m_advapi.resolve<RtlGenRandom_f>("SystemFunction036");
+         m_rtlgenrandom = m_advapi.resolve<RtlGenRandom_fptr>("SystemFunction036");
          }
 
       void randomize(uint8_t buf[], size_t len) override
          {
-         if(m_rtlgenrandom(buf, len) == false)
+         bool success = m_rtlgenrandom(buf, len) == TRUE;
+         if(!success)
             throw Exception("RtlGenRandom failed");
          }
 
@@ -50,10 +54,54 @@ class System_RNG_Impl final : public RandomNumberGenerator
       void clear() override { /* not possible */ }
       std::string name() const override { return "RtlGenRandom"; }
    private:
-      typedef BOOL (*RtlGenRandom_f)(PVOID, ULONG);
+      // Use type BYTE instead of BOOLEAN because of a naming conflict
+      // https://msdn.microsoft.com/en-us/library/windows/desktop/aa387694(v=vs.85).aspx
+      // https://msdn.microsoft.com/en-us/library/windows/desktop/aa383751(v=vs.85).aspx
+      using RtlGenRandom_fptr = BYTE (NTAPI *)(PVOID, ULONG);
 
       Dynamically_Loaded_Library m_advapi;
-      RtlGenRandom_f m_rtlgenrandom;
+      RtlGenRandom_fptr m_rtlgenrandom;
+   };
+
+#elif defined(BOTAN_TARGET_OS_HAS_CRYPTO_NG)
+
+class System_RNG_Impl final : public RandomNumberGenerator
+   {
+   public:
+      System_RNG_Impl()
+         {
+         NTSTATUS ret = ::BCryptOpenAlgorithmProvider(&m_prov,
+                                                      BCRYPT_RNG_ALGORITHM,
+                                                      MS_PRIMITIVE_PROVIDER, 0);
+         if(ret != STATUS_SUCCESS)
+            throw Exception("System_RNG failed to acquire crypto provider");
+         }
+
+      ~System_RNG_Impl()
+         {
+         ::BCryptCloseAlgorithmProvider(m_prov, 0);
+         }
+
+      void randomize(uint8_t buf[], size_t len) override
+         {
+         NTSTATUS ret = ::BCryptGenRandom(m_prov, static_cast<PUCHAR>(buf), static_cast<ULONG>(len), 0);
+         if(ret != STATUS_SUCCESS)
+            throw Exception("System_RNG call to BCryptGenRandom failed");
+         }
+
+      void add_entropy(const uint8_t in[], size_t length) override
+         {
+         /*
+         There is a flag BCRYPT_RNG_USE_ENTROPY_IN_BUFFER to provide
+         entropy inputs, but it is ignored in Windows 8 and later.
+         */
+         }
+
+      bool is_seeded() const override { return true; }
+      void clear() override { /* not possible */ }
+      std::string name() const override { return "crypto_ng"; }
+   private:
+      BCRYPT_ALG_HANDLE m_handle;
    };
 
 #elif defined(BOTAN_TARGET_OS_HAS_ARC4RANDOM)

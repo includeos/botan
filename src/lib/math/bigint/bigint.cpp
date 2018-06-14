@@ -113,6 +113,18 @@ BigInt::BigInt(RandomNumberGenerator& rng, size_t bits, bool set_high_bit)
    randomize(rng, bits, set_high_bit);
    }
 
+int32_t BigInt::cmp_word(word other) const
+   {
+   if(is_negative())
+      return -1; // other is positive ...
+
+   const size_t sw = this->sig_words();
+   if(sw > 1)
+      return 1; // must be larger since other is just one word ...
+
+   return bigint_cmp(this->data(), sw, &other, 1);
+   }
+
 /*
 * Comparison Function
 */
@@ -329,11 +341,17 @@ void BigInt::binary_decode(const uint8_t buf[], size_t length)
       m_reg[length / WORD_BYTES] = (m_reg[length / WORD_BYTES] << 8) | buf[i];
    }
 
-void BigInt::shrink_to_fit(size_t min_size)
+#if defined(BOTAN_HAS_VALGRIND)
+void BigInt::const_time_poison() const
    {
-   const size_t words = std::max(min_size, sig_words());
-   m_reg.resize(words);
+   CT::poison(m_reg.data(), m_reg.size());
    }
+
+void BigInt::const_time_unpoison() const
+   {
+   CT::unpoison(m_reg.data(), m_reg.size());
+   }
+#endif
 
 void BigInt::const_time_lookup(secure_vector<word>& output,
                                const std::vector<BigInt>& vec,

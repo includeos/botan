@@ -1,6 +1,6 @@
 /*
 * ASN.1 Internals
-* (C) 1999-2007 Jack Lloyd
+* (C) 1999-2007,2018 Jack Lloyd
 *
 * Botan is released under the Simplified BSD License (see license.txt)
 */
@@ -56,7 +56,8 @@ enum ASN1_Tag : uint32_t {
    DIRECTORY_STRING = 0xFF01
 };
 
-std::string BOTAN_DLL asn1_tag_to_string(ASN1_Tag type);
+std::string BOTAN_UNSTABLE_API asn1_tag_to_string(ASN1_Tag type);
+std::string BOTAN_UNSTABLE_API asn1_class_to_string(ASN1_Tag type);
 
 /**
 * Basic ASN.1 Object Interface
@@ -76,6 +77,13 @@ class BOTAN_PUBLIC_API(2,0) ASN1_Object
       */
       virtual void decode_from(BER_Decoder& from) = 0;
 
+      /**
+      * Return the encoding of this object. This is a convenience
+      * method when just one object needs to be serialized. Use
+      * DER_Encoder for complicated encodings.
+      */
+      std::vector<uint8_t> BER_encode() const;
+
       ASN1_Object() = default;
       ASN1_Object(const ASN1_Object&) = default;
       ASN1_Object & operator=(const ASN1_Object&) = default;
@@ -89,6 +97,16 @@ class BOTAN_PUBLIC_API(2,0) BER_Object final
    {
    public:
       BER_Object() : type_tag(NO_OBJECT), class_tag(UNIVERSAL) {}
+
+      BER_Object(const BER_Object& other) = default;
+
+      BER_Object& operator=(const BER_Object& other) = default;
+
+#if !defined(BOTAN_BUILD_COMPILER_IS_MSVC_2013)
+      BER_Object(BER_Object&& other) = default;
+
+      BER_Object& operator=(BER_Object&& other) = default;
+#endif
 
       bool is_set() const { return type_tag != NO_OBJECT; }
 

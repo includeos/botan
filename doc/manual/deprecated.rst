@@ -34,9 +34,9 @@ in the source.
   classes which currently subclass it. This only affects your code if you
   are referencing `Botan::SymmetricAlgorithm` directly.
 
-- Platform support for Google Native Client
+- Support for Visual C++ 2013
 
-- Platform support for Windows Phone
+- Platform support for Google Native Client
 
 - Support for PathScale and HP compilers
 

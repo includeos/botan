@@ -12,32 +12,29 @@
 
 namespace Botan {
 
-/*
-* Addition Operator
-*/
-BigInt& BigInt::operator+=(const BigInt& y)
+BigInt& BigInt::add(const word y[], size_t y_sw, Sign y_sign)
    {
-   const size_t x_sw = sig_words(), y_sw = y.sig_words();
+   const size_t x_sw = sig_words();
 
-   if(sign() == y.sign())
+   if(sign() == y_sign)
       {
       const size_t reg_size = std::max(x_sw, y_sw) + 1;
 
       if(m_reg.size() < reg_size)
          grow_to(reg_size);
 
-      bigint_add2(mutable_data(), reg_size - 1, y.data(), y_sw);
+      bigint_add2(mutable_data(), reg_size - 1, y, y_sw);
       }
    else
       {
-      const int32_t relative_size = bigint_cmp(data(), x_sw, y.data(), y_sw);
+      const int32_t relative_size = bigint_cmp(data(), x_sw, y, y_sw);
 
       if(relative_size < 0)
          {
          const size_t reg_size = std::max(x_sw, y_sw);
          grow_to(reg_size);
-         bigint_sub2_rev(mutable_data(), y.data(), y_sw);
-         set_sign(y.sign());
+         bigint_sub2_rev(mutable_data(), y, y_sw);
+         set_sign(y_sign);
          }
       else if(relative_size == 0)
          {
@@ -46,37 +43,44 @@ BigInt& BigInt::operator+=(const BigInt& y)
          }
       else if(relative_size > 0)
          {
-         bigint_sub2(mutable_data(), x_sw, y.data(), y_sw);
+         bigint_sub2(mutable_data(), x_sw, y, y_sw);
          }
       }
 
    return (*this);
    }
 
-/*
-* Subtraction Operator
-*/
-BigInt& BigInt::operator-=(const BigInt& y)
+BigInt& BigInt::operator+=(const BigInt& y)
    {
-   const size_t x_sw = sig_words(), y_sw = y.sig_words();
+   return add(y.data(), y.sig_words(), y.sign());
+   }
 
-   int32_t relative_size = bigint_cmp(data(), x_sw, y.data(), y_sw);
+BigInt& BigInt::operator+=(word y)
+   {
+   return add(&y, 1, Positive);
+   }
+
+BigInt& BigInt::sub(const word y[], size_t y_sw, Sign y_sign)
+   {
+   const size_t x_sw = sig_words();
+
+   int32_t relative_size = bigint_cmp(data(), x_sw, y, y_sw);
 
    const size_t reg_size = std::max(x_sw, y_sw) + 1;
    grow_to(reg_size);
 
    if(relative_size < 0)
       {
-      if(sign() == y.sign())
-         bigint_sub2_rev(mutable_data(), y.data(), y_sw);
+      if(sign() == y_sign)
+         bigint_sub2_rev(mutable_data(), y, y_sw);
       else
-         bigint_add2(mutable_data(), reg_size - 1, y.data(), y_sw);
+         bigint_add2(mutable_data(), reg_size - 1, y, y_sw);
 
-      set_sign(y.reverse_sign());
+      set_sign(y_sign == Positive ? Negative : Positive);
       }
    else if(relative_size == 0)
       {
-      if(sign() == y.sign())
+      if(sign() == y_sign)
          {
          clear();
          set_sign(Positive);
@@ -86,10 +90,69 @@ BigInt& BigInt::operator-=(const BigInt& y)
       }
    else if(relative_size > 0)
       {
-      if(sign() == y.sign())
-         bigint_sub2(mutable_data(), x_sw, y.data(), y_sw);
+      if(sign() == y_sign)
+         bigint_sub2(mutable_data(), x_sw, y, y_sw);
       else
-         bigint_add2(mutable_data(), reg_size - 1, y.data(), y_sw);
+         bigint_add2(mutable_data(), reg_size - 1, y, y_sw);
+      }
+
+   return (*this);
+   }
+
+BigInt& BigInt::operator-=(const BigInt& y)
+   {
+   return sub(y.data(), y.sig_words(), y.sign());
+   }
+
+BigInt& BigInt::operator-=(word y)
+   {
+   return sub(&y, 1, Positive);
+   }
+
+BigInt& BigInt::mod_add(const BigInt& s, const BigInt& mod, secure_vector<word>& ws)
+   {
+   if(this->is_negative() || s.is_negative() || mod.is_negative())
+      throw Invalid_Argument("BigInt::mod_add expects all arguments are positive");
+
+   // TODO add optimized version of this
+   *this += s;
+   this->reduce_below(mod, ws);
+
+   return (*this);
+   }
+
+BigInt& BigInt::mod_sub(const BigInt& s, const BigInt& mod, secure_vector<word>& ws)
+   {
+   if(this->is_negative() || s.is_negative() || mod.is_negative())
+      throw Invalid_Argument("BigInt::mod_sub expects all arguments are positive");
+
+   const size_t t_sw = sig_words();
+   const size_t s_sw = s.sig_words();
+   const size_t mod_sw = mod.sig_words();
+
+   if(t_sw > mod_sw || s_sw > mod_sw)
+      throw Invalid_Argument("BigInt::mod_sub args larger than modulus");
+
+   int32_t relative_size = bigint_cmp(data(), t_sw, s.data(), s_sw);
+
+   if(relative_size >= 0)
+      {
+      // this >= s in which case just subtract
+      bigint_sub2(mutable_data(), t_sw, s.data(), s_sw);
+      }
+   else
+      {
+      // Otherwise we must sub s and then add p (or add (p - s) as here)
+
+      ws.resize(mod_sw + 1);
+
+      bigint_sub3(ws.data(), mod.data(), mod_sw, s.data(), s_sw);
+
+      if(m_reg.size() < mod_sw)
+         grow_to(mod_sw);
+
+      word carry = bigint_add2_nc(mutable_data(), m_reg.size(), ws.data(), mod_sw);
+      BOTAN_ASSERT_NOMSG(carry == 0);
       }
 
    return (*this);

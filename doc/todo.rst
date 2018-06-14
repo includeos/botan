@@ -10,6 +10,7 @@ Request a new feature by opening a pull request to update this file.
 Ciphers, Hashes, PBKDF
 ----------------------------------------
 
+* Stiched AES-NI GCM mode
 * Bitsliced AES or Camellia
 * Compressed tables for AES
 * AES using vector permutes for NEON or AltiVec
@@ -19,7 +20,6 @@ Ciphers, Hashes, PBKDF
 * XSalsa20-Poly1305 AEAD compatible with NaCl
 * ASCON 1.2 (CAESAR)
 * NORX-64 3.0 (CAESAR)
-* scrypt PBKDF
 * Argon2 PBKDF (draft-irtf-cfrg-argon2)
 * bcrypt PBKDF
 * Skein-MAC
@@ -31,30 +31,31 @@ Ciphers, Hashes, PBKDF
 Public Key Crypto, Math
 ----------------------------------------
 
+* Abstract representation of ECC point elements to allow specific
+  implementations of the field arithmetic depending upon the curve.
 * Curves for pairings (BN-256 is widely implemented)
 * Identity based encryption
 * BBS group signatures
 * Paillier homomorphic cryptosystem
+* Socialist Millionaires Protocol
 * Hashing onto an elliptic curve
 * SPHINCS-256
 * X448 and Ed448
 * FHMQV
 * Use GLV decomposition to speed up secp256k1 operations
-* Optimize ECC point doubling for a=-3 and a=0 curves
 * wNAF ECC point multiply
 * Recover ECDSA public key from signature/message pair (GH #664)
 
 Utility Functions
 ------------------
 
-* base58 and base32 encoding
+* base58 encoding
 
 Multiparty Protocols
 ----------------------
 
 * Distributed key generation for DL, RSA
 * Threshold signing, decryption
-* Socialist Millionaires Protocol
 
 External Providers, Hardware Support
 ----------------------------------------
@@ -83,7 +84,6 @@ TLS
 * Certificate pinning (using TACK?)
 * Certificate Transparency
 * TLS supplemental authorization data (RFC 4680, RFC 5878)
-* OpenPGP authentication (RFC 5081)
 * DTLS-SCTP (RFC 6083)
 * Perspectives (http://perspectives-project.org/)
 * Support for server key stored in TPM or PKCS #11
@@ -104,11 +104,13 @@ PKIX
 New Protocols / Formats
 ----------------------------------------
 
+* ORAM (Circuit-ORAM, Path-ORAM, ??)
 * Roughtime client (https://roughtime.googlesource.com/roughtime/)
 * PKCS7 / Cryptographic Message Syntax
 * PKCS12 / PFX
 * NaCl compatible cryptobox functions
 * Off-The-Record v3 https://otr.cypherpunks.ca/
+* Fernet symmetric encryption (https://cryptography.io/en/latest/fernet/)
 * Some useful subset of OpenPGP
   - Subset #1: symmetrically encrypted files
 
@@ -171,7 +173,7 @@ FIPS 140 Build
   plus wrapping the appropriate functions for self-tests and so on. This creates a
   library in FIPS 140 validated form (since there is no 'crypto' anymore from
   Botan, just the ASN.1 parser, TLS library, PKI etc all of which FIPS 140 does
-  not care about) without the enourmous hassle and expense of actually having to
+  not care about) without the enormous hassle and expense of actually having to
   maintain a FIPS validation on Botan. Email Jack if you are interested in this.
 
 CLI

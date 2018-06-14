@@ -18,7 +18,7 @@ class Montgomery_Params;
 /**
 * The Montgomery representation of an integer
 */
-class Montgomery_Int final
+class BOTAN_UNSTABLE_API Montgomery_Int final
    {
    public:
       /**
@@ -75,6 +75,12 @@ class Montgomery_Int final
 
       Montgomery_Int& operator*=(const secure_vector<word>& other);
 
+      Montgomery_Int& add(const Montgomery_Int& other,
+                          secure_vector<word>& ws);
+
+      Montgomery_Int& sub(const Montgomery_Int& other,
+                          secure_vector<word>& ws);
+
       Montgomery_Int mul(const Montgomery_Int& other,
                          secure_vector<word>& ws) const;
 
@@ -100,6 +106,9 @@ class Montgomery_Int final
 
       Montgomery_Int& mul_by_8(secure_vector<word>& ws);
 
+      void const_time_poison() const { m_v.const_time_poison(); }
+      void const_time_unpoison() const { return m_v.const_time_unpoison(); }
+
    private:
       std::shared_ptr<const Montgomery_Params> m_params;
       BigInt m_v;
@@ -108,7 +117,7 @@ class Montgomery_Int final
 /**
 * Parameters for Montgomery Reduction
 */
-class Montgomery_Params final
+class BOTAN_UNSTABLE_API Montgomery_Params final
    {
    public:
       /**
@@ -145,6 +154,9 @@ class Montgomery_Params final
 
       void mul_by(BigInt& x,
                   const secure_vector<word>& y,
+                  secure_vector<word>& ws) const;
+
+      void mul_by(BigInt& x, const BigInt& y,
                   secure_vector<word>& ws) const;
 
       BigInt sqr(const BigInt& x,

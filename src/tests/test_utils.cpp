@@ -22,6 +22,10 @@
    #include <botan/base64.h>
 #endif
 
+#if defined(BOTAN_HAS_BASE32_CODEC)
+   #include <botan/base32.h>
+#endif
+
 #if defined(BOTAN_HAS_POLY_DBL)
    #include <botan/internal/poly_dbl.h>
 #endif
@@ -41,10 +45,10 @@ class Utility_Function_Tests final : public Text_Based_Test
 
          if(algo == "round_up")
             {
-            const size_t x = get_req_sz(vars, "In1");
-            const size_t to = get_req_sz(vars, "In2");
+            const size_t x = vars.get_req_sz("In1");
+            const size_t to = vars.get_req_sz("In2");
 
-            result.test_eq(algo, Botan::round_up(x, to), get_req_sz(vars, "Out"));
+            result.test_eq(algo, Botan::round_up(x, to), vars.get_req_sz("Out"));
 
             try
                {
@@ -55,10 +59,10 @@ class Utility_Function_Tests final : public Text_Based_Test
             }
          else if(algo == "round_down")
             {
-            const size_t x = get_req_sz(vars, "In1");
-            const size_t to = get_req_sz(vars, "In2");
+            const size_t x = vars.get_req_sz("In1");
+            const size_t to = vars.get_req_sz("In2");
 
-            result.test_eq(algo, Botan::round_down<size_t>(x, to), get_req_sz(vars, "Out"));
+            result.test_eq(algo, Botan::round_down<size_t>(x, to), vars.get_req_sz("Out"));
             result.test_eq(algo, Botan::round_down<size_t>(x, 0), x);
             }
 
@@ -228,8 +232,8 @@ class Poly_Double_Tests final : public Text_Based_Test
       Test::Result run_one_test(const std::string&, const VarMap& vars) override
          {
          Test::Result result("Polynomial doubling");
-         const std::vector<uint8_t> in  = get_req_bin(vars, "In");
-         const std::vector<uint8_t> out = get_req_bin(vars, "Out");
+         const std::vector<uint8_t> in  = vars.get_req_bin("In");
+         const std::vector<uint8_t> out = vars.get_req_bin("Out");
 
          std::vector<uint8_t> b = in;
          Botan::poly_double_n(b.data(), b.size());
@@ -266,7 +270,7 @@ class Date_Format_Tests final : public Text_Based_Test
 
       Test::Result run_one_test(const std::string& type, const VarMap& vars) override
          {
-         const std::string date_str = get_req_str(vars, "Date");
+         const std::string date_str = vars.get_req_str("Date");
          Test::Result result("Date parsing");
 
          const std::vector<uint32_t> d = parse_date(date_str);
@@ -320,6 +324,86 @@ class Date_Format_Tests final : public Text_Based_Test
 
 BOTAN_REGISTER_TEST("util_dates", Date_Format_Tests);
 
+#if defined(BOTAN_HAS_BASE32_CODEC)
+
+class Base32_Tests final : public Text_Based_Test
+   {
+   public:
+      Base32_Tests() : Text_Based_Test("base32.vec", "Base32", "Binary") {}
+
+      Test::Result run_one_test(const std::string& type, const VarMap& vars) override
+         {
+         Test::Result result("Base32");
+
+         const bool is_valid = (type == "valid");
+         const std::string base32 = vars.get_req_str("Base32");
+
+         try
+            {
+            if(is_valid)
+               {
+               const std::vector<uint8_t> binary = vars.get_req_bin("Binary");
+               result.test_eq("base32 decoding", Botan::base32_decode(base32), binary);
+               result.test_eq("base32 encoding", Botan::base32_encode(binary), base32);
+               }
+            else
+               {
+               auto res = Botan::base32_decode(base32);
+               result.test_failure("decoded invalid base32 to " + Botan::hex_encode(res));
+               }
+            }
+         catch(std::exception& e)
+            {
+            if(is_valid)
+               {
+               result.test_failure("rejected valid base32", e.what());
+               }
+            else
+               {
+               result.test_note("rejected invalid base32");
+               }
+            }
+
+         return result;
+         }
+
+      std::vector<Test::Result> run_final_tests() override
+         {
+         Test::Result result("Base32");
+         const std::string valid_b32 = "MY======";
+
+         for(char ws_char : { ' ', '\t', '\r', '\n' })
+            {
+            for(size_t i = 0; i <= valid_b32.size(); ++i)
+               {
+               std::string b32_ws = valid_b32;
+               b32_ws.insert(i, 1, ws_char);
+
+               try
+                  {
+                  result.test_failure("decoded whitespace base32", Botan::base32_decode(b32_ws, false));
+                  }
+               catch(std::exception&) {}
+
+               try
+                  {
+                  result.test_eq("base32 decoding with whitespace", Botan::base32_decode(b32_ws, true), "66");
+                  }
+               catch(std::exception& e)
+                  {
+                  result.test_failure(b32_ws, e.what());
+                  }
+               }
+            }
+
+         return {result};
+         }
+   };
+
+BOTAN_REGISTER_TEST("base32", Base32_Tests);
+
+#endif
+
 #if defined(BOTAN_HAS_BASE64_CODEC)
 
 class Base64_Tests final : public Text_Based_Test
@@ -332,13 +416,13 @@ class Base64_Tests final : public Text_Based_Test
          Test::Result result("Base64");
 
          const bool is_valid = (type == "valid");
-         const std::string base64 = get_req_str(vars, "Base64");
+         const std::string base64 = vars.get_req_str("Base64");
 
          try
             {
             if(is_valid)
                {
-               const std::vector<uint8_t> binary = get_req_bin(vars, "Binary");
+               const std::vector<uint8_t> binary = vars.get_req_bin("Binary");
                result.test_eq("base64 decoding", Botan::base64_decode(base64), binary);
                result.test_eq("base64 encoding", Botan::base64_encode(binary), base64);
                }
@@ -409,8 +493,8 @@ class Charset_Tests final : public Text_Based_Test
          {
          Test::Result result("Charset");
 
-         const std::vector<uint8_t> in = get_req_bin(vars, "In");
-         const std::vector<uint8_t> expected = get_req_bin(vars, "Out");
+         const std::vector<uint8_t> in = vars.get_req_bin("In");
+         const std::vector<uint8_t> expected = vars.get_req_bin("Out");
 
          const std::string in_str(in.begin(), in.end());
 
@@ -485,10 +569,11 @@ class Charset_Tests final : public Text_Based_Test
          result.test_throws("conversion fails for non-Latin1 characters", []()
             {
             // "abcdefŸabcdef"
-            const std::vector<uint8_t> input = {
+            const std::vector<uint8_t> input =
+               {
                0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0xC5,
                0xB8, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66
-            };
+               };
 
             Botan::utf8_to_latin1(std::string(input.begin(), input.end()));
             });
@@ -533,8 +618,8 @@ class Hostname_Tests final : public Text_Based_Test
          {
          Test::Result result("Hostname Matching");
 
-         const std::string issued = get_req_str(vars, "Issued");
-         const std::string hostname = get_req_str(vars, "Hostname");
+         const std::string issued = vars.get_req_str("Issued");
+         const std::string hostname = vars.get_req_str("Hostname");
          const bool expected = (type == "Invalid") ? false : true;
 
          const std::string what = hostname + ((expected == true) ?

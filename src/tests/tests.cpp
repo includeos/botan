@@ -141,7 +141,7 @@ bool Test::Result::test_throws(const std::string& what, const std::string& expec
 
 bool Test::Result::test_success(const std::string& note)
    {
-   if(Test::log_success())
+   if(Test::options().log_success())
       {
       test_note(note);
       }
@@ -165,7 +165,7 @@ bool Test::Result::test_failure(const std::string& err)
    {
    m_fail_log.push_back(err);
 
-   if(m_who != "Failing Test" && Test::abort_on_first_fail())
+   if(Test::options().abort_on_first_fail() && m_who != "Failing Test")
       {
       std::abort();
       }
@@ -415,8 +415,10 @@ std::string Test::format_time(uint64_t ns)
    return o.str();
    }
 
-std::string Test::Result::result_string(bool verbose) const
+std::string Test::Result::result_string() const
    {
+   const bool verbose = Test::options().verbose();
+
    if(tests_run() == 0 && !verbose)
       {
       return "";
@@ -624,29 +626,11 @@ std::string Test::random_password()
    return Botan::hex_encode(Test::rng().random_vec(len));
    }
 
-Text_Based_Test::Text_Based_Test(const std::string& data_src,
-                                 const std::string& required_keys_str,
-                                 const std::string& optional_keys_str) :
-   m_data_src(data_src)
-   {
-   if(required_keys_str.empty())
-      {
-      throw Test_Error("Invalid test spec");
-      }
-
-   std::vector<std::string> required_keys = Botan::split_on(required_keys_str, ',');
-   std::vector<std::string> optional_keys = Botan::split_on(optional_keys_str, ',');
-
-   m_required_keys.insert(required_keys.begin(), required_keys.end());
-   m_optional_keys.insert(optional_keys.begin(), optional_keys.end());
-   m_output_key = required_keys.at(required_keys.size() - 1);
-   }
-
-std::vector<uint8_t> Text_Based_Test::get_req_bin(const VarMap& vars,
+std::vector<uint8_t> VarMap::get_req_bin(
       const std::string& key) const
    {
-   auto i = vars.find(key);
-   if(i == vars.end())
+   auto i = m_vars.find(key);
+   if(i == m_vars.end())
       {
       throw Test_Error("Test missing variable " + key);
       }
@@ -655,29 +639,28 @@ std::vector<uint8_t> Text_Based_Test::get_req_bin(const VarMap& vars,
       {
       return Botan::hex_decode(i->second);
       }
-   catch(std::exception&)
+   catch(std::exception& e)
       {
-      throw Test_Error("Test invalid hex input '" + i->second + "'" +
-                       + " for key " + key);
+      std::ostringstream oss;
+      oss << "Bad input '" << i->second << "'" << " for key " << key << " - " << e.what();
+      throw Test_Error(oss.str());
       }
    }
 
-std::string Text_Based_Test::get_opt_str(const VarMap& vars,
-      const std::string& key, const std::string& def_value) const
-
+std::string VarMap::get_opt_str(const std::string& key, const std::string& def_value) const
    {
-   auto i = vars.find(key);
-   if(i == vars.end())
+   auto i = m_vars.find(key);
+   if(i == m_vars.end())
       {
       return def_value;
       }
    return i->second;
    }
 
-bool Text_Based_Test::get_req_bool(const VarMap& vars, const std::string& key) const
+bool VarMap::get_req_bool( const std::string& key) const
    {
-   auto i = vars.find(key);
-   if(i == vars.end())
+   auto i = m_vars.find(key);
+   if(i == m_vars.end())
       {
       throw Test_Error("Test missing variable " + key);
       }
@@ -696,31 +679,31 @@ bool Text_Based_Test::get_req_bool(const VarMap& vars, const std::string& key) c
       }
    }
 
-size_t Text_Based_Test::get_req_sz(const VarMap& vars, const std::string& key) const
+size_t VarMap::get_req_sz( const std::string& key) const
    {
-   auto i = vars.find(key);
-   if(i == vars.end())
+   auto i = m_vars.find(key);
+   if(i == m_vars.end())
       {
       throw Test_Error("Test missing variable " + key);
       }
    return Botan::to_u32bit(i->second);
    }
 
-size_t Text_Based_Test::get_opt_sz(const VarMap& vars, const std::string& key, const size_t def_value) const
+size_t VarMap::get_opt_sz( const std::string& key, const size_t def_value) const
    {
-   auto i = vars.find(key);
-   if(i == vars.end())
+   auto i = m_vars.find(key);
+   if(i == m_vars.end())
       {
       return def_value;
       }
    return Botan::to_u32bit(i->second);
    }
 
-std::vector<uint8_t> Text_Based_Test::get_opt_bin(const VarMap& vars,
+std::vector<uint8_t> VarMap::get_opt_bin(
       const std::string& key) const
    {
-   auto i = vars.find(key);
-   if(i == vars.end())
+   auto i = m_vars.find(key);
+   if(i == m_vars.end())
       {
       return std::vector<uint8_t>();
       }
@@ -736,10 +719,10 @@ std::vector<uint8_t> Text_Based_Test::get_opt_bin(const VarMap& vars,
       }
    }
 
-std::string Text_Based_Test::get_req_str(const VarMap& vars, const std::string& key) const
+std::string VarMap::get_req_str( const std::string& key) const
    {
-   auto i = vars.find(key);
-   if(i == vars.end())
+   auto i = m_vars.find(key);
+   if(i == m_vars.end())
       {
       throw Test_Error("Test missing variable " + key);
       }
@@ -747,11 +730,11 @@ std::string Text_Based_Test::get_req_str(const VarMap& vars, const std::string& 
    }
 
 #if defined(BOTAN_HAS_BIGINT)
-Botan::BigInt Text_Based_Test::get_req_bn(const VarMap& vars,
+Botan::BigInt VarMap::get_req_bn(
       const std::string& key) const
    {
-   auto i = vars.find(key);
-   if(i == vars.end())
+   auto i = m_vars.find(key);
+   if(i == m_vars.end())
       {
       throw Test_Error("Test missing variable " + key);
       }
@@ -766,13 +749,12 @@ Botan::BigInt Text_Based_Test::get_req_bn(const VarMap& vars,
       }
    }
 
-Botan::BigInt Text_Based_Test::get_opt_bn(const VarMap& vars,
-      const std::string& key,
-      const Botan::BigInt& def_value) const
+Botan::BigInt VarMap::get_opt_bn(const std::string& key,
+                                 const Botan::BigInt& def_value) const
 
    {
-   auto i = vars.find(key);
-   if(i == vars.end())
+   auto i = m_vars.find(key);
+   if(i == m_vars.end())
       {
       return def_value;
       }
@@ -787,6 +769,24 @@ Botan::BigInt Text_Based_Test::get_opt_bn(const VarMap& vars,
       }
    }
 #endif
+
+Text_Based_Test::Text_Based_Test(const std::string& data_src,
+                                 const std::string& required_keys_str,
+                                 const std::string& optional_keys_str) :
+   m_data_src(data_src)
+   {
+   if(required_keys_str.empty())
+      {
+      throw Test_Error("Invalid test spec");
+      }
+
+   std::vector<std::string> required_keys = Botan::split_on(required_keys_str, ',');
+   std::vector<std::string> optional_keys = Botan::split_on(optional_keys_str, ',');
+
+   m_required_keys.insert(required_keys.begin(), required_keys.end());
+   m_optional_keys.insert(optional_keys.begin(), optional_keys.end());
+   m_output_key = required_keys.at(required_keys.size() - 1);
+   }
 
 std::string Text_Based_Test::get_next_line()
    {
@@ -971,7 +971,7 @@ std::vector<Test::Result> Text_Based_Test::run()
          results.push_back(Test::Result::Failure(header_or_name,
                                                  test_id + " failed unknown key " + key));
 
-      vars[key] = val;
+      vars.add(key, val);
 
       if(key == m_output_key)
          {

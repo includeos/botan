@@ -80,3 +80,10 @@ botan-includeos.tar.gz
 /*.pub
 /*.crt
 /*.txt
+/*.rst
+
+# Add back files from the toplevel
+!/news.rst
+!/readme.rst
+!/configure.py
+!/license.txt

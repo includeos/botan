@@ -51,6 +51,13 @@ void SHA_256::compress_digest(secure_vector<uint32_t>& digest,
       }
 #endif
 
+#if defined(BOTAN_HAS_SHA2_32_X86_BMI2)
+   if(CPUID::has_bmi2())
+      {
+      return SHA_256::compress_digest_x86_bmi2(digest, input, blocks);
+      }
+#endif
+
 #if defined(BOTAN_HAS_SHA2_32_ARMV8)
    if(CPUID::has_arm_sha2())
       {
@@ -59,8 +66,8 @@ void SHA_256::compress_digest(secure_vector<uint32_t>& digest,
 #endif
 
    uint32_t A = digest[0], B = digest[1], C = digest[2],
-          D = digest[3], E = digest[4], F = digest[5],
-          G = digest[6], H = digest[7];
+            D = digest[3], E = digest[4], F = digest[5],
+            G = digest[6], H = digest[7];
 
    for(size_t i = 0; i != blocks; ++i)
       {
@@ -97,6 +104,7 @@ void SHA_256::compress_digest(secure_vector<uint32_t>& digest,
       SHA2_32_F(D, E, F, G, H, A, B, C, W13, W11, W06, W14, 0x80DEB1FE);
       SHA2_32_F(C, D, E, F, G, H, A, B, W14, W12, W07, W15, 0x9BDC06A7);
       SHA2_32_F(B, C, D, E, F, G, H, A, W15, W13, W08, W00, 0xC19BF174);
+
       SHA2_32_F(A, B, C, D, E, F, G, H, W00, W14, W09, W01, 0xE49B69C1);
       SHA2_32_F(H, A, B, C, D, E, F, G, W01, W15, W10, W02, 0xEFBE4786);
       SHA2_32_F(G, H, A, B, C, D, E, F, W02, W00, W11, W03, 0x0FC19DC6);
@@ -113,6 +121,7 @@ void SHA_256::compress_digest(secure_vector<uint32_t>& digest,
       SHA2_32_F(D, E, F, G, H, A, B, C, W13, W11, W06, W14, 0xD5A79147);
       SHA2_32_F(C, D, E, F, G, H, A, B, W14, W12, W07, W15, 0x06CA6351);
       SHA2_32_F(B, C, D, E, F, G, H, A, W15, W13, W08, W00, 0x14292967);
+
       SHA2_32_F(A, B, C, D, E, F, G, H, W00, W14, W09, W01, 0x27B70A85);
       SHA2_32_F(H, A, B, C, D, E, F, G, W01, W15, W10, W02, 0x2E1B2138);
       SHA2_32_F(G, H, A, B, C, D, E, F, W02, W00, W11, W03, 0x4D2C6DFC);
@@ -129,6 +138,7 @@ void SHA_256::compress_digest(secure_vector<uint32_t>& digest,
       SHA2_32_F(D, E, F, G, H, A, B, C, W13, W11, W06, W14, 0xD6990624);
       SHA2_32_F(C, D, E, F, G, H, A, B, W14, W12, W07, W15, 0xF40E3585);
       SHA2_32_F(B, C, D, E, F, G, H, A, W15, W13, W08, W00, 0x106AA070);
+
       SHA2_32_F(A, B, C, D, E, F, G, H, W00, W14, W09, W01, 0x19A4C116);
       SHA2_32_F(H, A, B, C, D, E, F, G, W01, W15, W10, W02, 0x1E376C08);
       SHA2_32_F(G, H, A, B, C, D, E, F, W02, W00, W11, W03, 0x2748774C);

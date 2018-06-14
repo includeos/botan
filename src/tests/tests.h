@@ -58,22 +58,24 @@ class Test_Options
                    const std::string& provider,
                    const std::string& drbg_seed,
                    size_t test_runs,
+                   bool verbose,
                    bool log_success,
                    bool run_online_tests,
                    bool run_long_tests,
                    bool abort_on_first_fail,
-                   bool no_avoid_undefined) :
+                   bool undefined_behavior_allowed) :
          m_requested_tests(requested_tests),
          m_data_dir(data_dir),
          m_pkcs11_lib(pkcs11_lib),
          m_provider(provider),
          m_drbg_seed(drbg_seed),
          m_test_runs(test_runs),
+         m_verbose(verbose),
          m_log_success(log_success),
          m_run_online_tests(run_online_tests),
          m_run_long_tests(run_long_tests),
          m_abort_on_first_fail(abort_on_first_fail),
-         m_no_avoid_undefined(no_avoid_undefined)
+         m_undefined_behavior_allowed(undefined_behavior_allowed)
          {}
 
       const std::vector<std::string>& requested_tests() const
@@ -97,12 +99,14 @@ class Test_Options
 
       bool abort_on_first_fail() const { return m_abort_on_first_fail; }
 
-      bool no_avoid_undefined_behavior() const
+      bool verbose() const { return m_verbose; }
+
+      bool undefined_behavior_allowed() const
          {
 #if defined(BOTAN_HAS_SANITIZER_UNDEFINED)
-         return m_no_avoid_undefined;
+         return m_undefined_behavior_allowed;
 #else
-         BOTAN_UNUSED(m_no_avoid_undefined);
+         BOTAN_UNUSED(m_undefined_behavior_allowed);
          return true;
 #endif
          }
@@ -114,11 +118,12 @@ class Test_Options
       std::string m_provider;
       std::string m_drbg_seed;
       size_t m_test_runs;
+      bool m_verbose;
       bool m_log_success;
       bool m_run_online_tests;
       bool m_run_long_tests;
       bool m_abort_on_first_fail;
-      bool m_no_avoid_undefined;
+      bool m_undefined_behavior_allowed;
    };
 
 /*
@@ -161,7 +166,8 @@ class Test
                {
                return m_who;
                }
-            std::string result_string(bool verbose) const;
+
+            std::string result_string() const;
 
             static Result Failure(const std::string& who,
                                   const std::string& what)
@@ -474,13 +480,11 @@ class Test
 
       static void set_test_rng(std::unique_ptr<Botan::RandomNumberGenerator> rng);
 
-      static bool no_avoid_undefined_behavior() { return m_opts.no_avoid_undefined_behavior(); }
-      static bool log_success() { return m_opts.log_success(); }
-      static bool run_online_tests() { return m_opts.run_online_tests(); }
-      static bool run_long_tests() { return m_opts.run_long_tests(); }
-      static bool abort_on_first_fail() { return m_opts.abort_on_first_fail(); }
-      static const std::string& data_dir() { return m_opts.data_dir(); }
-      static const std::string& pkcs11_lib() { return m_opts.pkcs11_lib(); }
+      static const Test_Options& options() { return m_opts; }
+
+      static bool run_long_tests() { return options().run_long_tests(); }
+      static const std::string& data_dir() { return options().data_dir(); }
+      static const std::string& pkcs11_lib() { return options().pkcs11_lib(); }
 
       static std::string temp_file_name(const std::string& basename);
 
@@ -504,6 +508,42 @@ class Test
 #define BOTAN_REGISTER_TEST(type, Test_Class) \
    Test::Registration reg_ ## Test_Class ## _tests(type, new Test_Class)
 
+class VarMap
+   {
+   public:
+      void clear() { m_vars.clear(); }
+
+      void add(const std::string& key, const std::string& value)
+         {
+         m_vars[key] = value;
+         }
+
+      bool has_key(const std::string& key) const
+         {
+         return m_vars.count(key) == 1;
+         }
+
+      bool get_req_bool(const std::string& key) const;
+
+      std::vector<uint8_t> get_req_bin(const std::string& key) const;
+      std::vector<uint8_t> get_opt_bin(const std::string& key) const;
+
+#if defined(BOTAN_HAS_BIGINT)
+      Botan::BigInt get_req_bn(const std::string& key) const;
+      Botan::BigInt get_opt_bn(const std::string& key, const Botan::BigInt& def_value) const;
+#endif
+
+      std::string get_req_str(const std::string& key) const;
+      std::string get_opt_str(const std::string& key,
+                              const std::string& def_value) const;
+
+      size_t get_req_sz(const std::string& key) const;
+      size_t get_opt_sz(const std::string& key, const size_t def_value) const;
+
+   private:
+      std::unordered_map<std::string, std::string> m_vars;
+   };
+
 /*
 * A test based on reading an input file which contains key/value pairs
 * Special note: the last value in required_key (there must be at least
@@ -512,8 +552,8 @@ class Test
 * Calls run_one_test with the variables set. If an ini-style [header]
 * is used in the file, then header will be set to that value. This allows
 * splitting up tests between [valid] and [invalid] tests, or different
-* related algorithms tested in the same file. Use the protected get_XXX
-* functions to retrieve formatted values from the VarMap
+* related algorithms tested in the same file. Use the get_XXX functions
+* on VarMap to retrieve formatted values.
 *
 * If most of your tests are text-based but you find yourself with a few
 * odds-and-ends tests that you want to do, override run_final_tests which
@@ -533,7 +573,6 @@ class Text_Based_Test : public Test
 
       std::vector<Test::Result> run() override;
    protected:
-      typedef std::unordered_map<std::string, std::string> VarMap;
       std::string get_next_line();
 
       virtual Test::Result run_one_test(const std::string& header,
@@ -547,23 +586,6 @@ class Text_Based_Test : public Test
          return std::vector<Test::Result>();
          }
 
-      bool get_req_bool(const VarMap& vars, const std::string& key) const;
-
-      std::vector<uint8_t> get_req_bin(const VarMap& vars, const std::string& key) const;
-      std::vector<uint8_t> get_opt_bin(const VarMap& vars, const std::string& key) const;
-
-#if defined(BOTAN_HAS_BIGINT)
-      Botan::BigInt get_req_bn(const VarMap& vars, const std::string& key) const;
-      Botan::BigInt get_opt_bn(const VarMap& vars, const std::string& key, const Botan::BigInt& def_value) const;
-#endif
-
-      std::string get_req_str(const VarMap& vars, const std::string& key) const;
-      std::string get_opt_str(const VarMap& vars,
-                              const std::string& key,
-                              const std::string& def_value) const;
-
-      size_t get_req_sz(const VarMap& vars, const std::string& key) const;
-      size_t get_opt_sz(const VarMap& vars, const std::string& key, const size_t def_value) const;
    private:
       std::string m_data_src;
       std::set<std::string> m_required_keys;

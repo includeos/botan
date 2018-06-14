@@ -91,6 +91,7 @@
    #include <botan/numthry.h>
    #include <botan/pow_mod.h>
    #include <botan/reducer.h>
+   #include <botan/curve_nistp.h>
 #endif
 
 #if defined(BOTAN_HAS_ECC_GROUP)
@@ -107,6 +108,10 @@
 
 #if defined(BOTAN_HAS_NEWHOPE)
    #include <botan/newhope.h>
+#endif
+
+#if defined(BOTAN_HAS_SCRYPT)
+   #include <botan/scrypt.h>
 #endif
 
 namespace Botan_CLI {
@@ -633,6 +638,7 @@ class Speed final : public Command
             "AES-128/OCB",
             "AES-128/GCM",
             "AES-128/XTS",
+            "AES-128/SIV",
 
             "Serpent/CBC",
             "Serpent/CTR-BE",
@@ -640,37 +646,36 @@ class Speed final : public Command
             "Serpent/OCB",
             "Serpent/GCM",
             "Serpent/XTS",
+            "Serpent/SIV",
 
             "ChaCha20Poly1305",
 
             /* Stream ciphers */
             "RC4",
             "Salsa20",
+            "ChaCha20",
 
             /* Hashes */
-            "Tiger",
-            "RIPEMD-160",
             "SHA-160",
             "SHA-256",
             "SHA-512",
+            "SHA-3(256)",
+            "SHA-3(512)",
+            "RIPEMD-160",
             "Skein-512",
-            "Keccak-1600(512)",
+            "Blake2b",
+            "Tiger",
             "Whirlpool",
 
             /* MACs */
             "CMAC(AES-128)",
             "HMAC(SHA-256)",
 
-            /* Misc */
-            "random_prime",
-
             /* pubkey */
             "RSA",
             "DH",
             "ECDH",
             "ECDSA",
-            "ECKCDSA",
-            "ECGDSA",
             "Ed25519",
             "Curve25519",
             "NEWHOPE",
@@ -891,6 +896,12 @@ class Speed final : public Command
                bench_newhope(provider, msec);
                }
 #endif
+#if defined(BOTAN_HAS_SCRYPT)
+            else if(algo == "scrypt")
+               {
+               bench_scrypt(provider, msec);
+               }
+#endif
 
 #if defined(BOTAN_HAS_DL_GROUP)
             else if(algo == "modexp")
@@ -919,6 +930,10 @@ class Speed final : public Command
                {
                bench_bn_redc(msec);
                }
+            else if(algo == "nistp_redc")
+               {
+               bench_nistp_redc(msec);
+               }
 #endif
 
 #if defined(BOTAN_HAS_FPE_FE1)
@@ -939,6 +954,10 @@ class Speed final : public Command
             else if(algo == "ecc_mult")
                {
                bench_ecc_mult(ecc_groups, msec);
+               }
+            else if(algo == "ecc_ops")
+               {
+               bench_ecc_ops(ecc_groups, msec);
                }
             else if(algo == "os2ecp")
                {
@@ -1308,6 +1327,35 @@ class Speed final : public Command
          }
 
 #if defined(BOTAN_HAS_ECC_GROUP)
+      void bench_ecc_ops(const std::vector<std::string>& groups, const std::chrono::milliseconds runtime)
+         {
+         for(std::string group_name : groups)
+            {
+            const Botan::EC_Group group(group_name);
+
+            std::unique_ptr<Timer> add_timer = make_timer(group_name + " add");
+            std::unique_ptr<Timer> addf_timer = make_timer(group_name + " addf");
+            std::unique_ptr<Timer> dbl_timer = make_timer(group_name + " dbl");
+
+            const Botan::PointGFp& base_point = group.get_base_point();
+            Botan::PointGFp non_affine_pt = group.get_base_point() * 1776; // create a non-affine point
+            Botan::PointGFp pt = group.get_base_point();
+
+            std::vector<Botan::BigInt> ws(Botan::PointGFp::WORKSPACE_SIZE);
+
+            while(add_timer->under(runtime) && addf_timer->under(runtime) && dbl_timer->under(runtime))
+               {
+               dbl_timer->run([&]() { pt.mult2(ws); });
+               add_timer->run([&]() { pt.add(non_affine_pt, ws); });
+               addf_timer->run([&]() { pt.add_affine(base_point, ws); });
+               }
+
+            record_result(dbl_timer);
+            record_result(add_timer);
+            record_result(addf_timer);
+            }
+         }
+
       void bench_ecc_mult(const std::vector<std::string>& groups, const std::chrono::milliseconds runtime)
          {
          for(std::string group_name : groups)
@@ -1506,6 +1554,53 @@ class Speed final : public Command
 #endif
 
 #if defined(BOTAN_HAS_NUMBERTHEORY)
+      void bench_nistp_redc(const std::chrono::milliseconds total_runtime)
+         {
+         Botan::secure_vector<Botan::word> ws;
+
+         auto runtime = total_runtime / 5;
+
+         std::unique_ptr<Timer> p192_timer = make_timer("P-192 redc");
+         while(p192_timer->under(runtime))
+            {
+            Botan::BigInt r192(rng(), 192*2 - 1);
+            p192_timer->run([&]() { Botan::redc_p192(r192, ws); });
+            }
+         record_result(p192_timer);
+
+         std::unique_ptr<Timer> p224_timer = make_timer("P-224 redc");
+         while(p224_timer->under(runtime))
+            {
+            Botan::BigInt r224(rng(), 224*2 - 1);
+            p224_timer->run([&]() { Botan::redc_p224(r224, ws); });
+            }
+         record_result(p224_timer);
+
+         std::unique_ptr<Timer> p256_timer = make_timer("P-256 redc");
+         while(p256_timer->under(runtime))
+            {
+            Botan::BigInt r256(rng(), 256*2 - 1);
+            p256_timer->run([&]() { Botan::redc_p256(r256, ws); });
+            }
+         record_result(p256_timer);
+
+         std::unique_ptr<Timer> p384_timer = make_timer("P-384 redc");
+         while(p384_timer->under(runtime))
+            {
+            Botan::BigInt r384(rng(), 384*2 - 1);
+            p384_timer->run([&]() { Botan::redc_p384(r384, ws); });
+            }
+         record_result(p384_timer);
+
+         std::unique_ptr<Timer> p521_timer = make_timer("P-521 redc");
+         while(p521_timer->under(runtime))
+            {
+            Botan::BigInt r521(rng(), 521*2 - 1);
+            p521_timer->run([&]() { Botan::redc_p521(r521, ws); });
+            }
+         record_result(p521_timer);
+         }
+
       void bench_bn_redc(const std::chrono::milliseconds runtime)
          {
          Botan::BigInt p;
@@ -1902,7 +1997,7 @@ class Speed final : public Command
       void bench_dh(const std::string& provider,
                     std::chrono::milliseconds msec)
          {
-         for(size_t bits : { 1024, 2048, 3072, 4096, 6144, 8192 })
+         for(size_t bits : { 1024, 1536, 2048, 3072, 4096, 6144, 8192 })
             {
             bench_pk_ka("DH",
                         "DH-" + std::to_string(bits),
@@ -2026,7 +2121,11 @@ class Speed final : public Command
       void bench_xmss(const std::string& provider,
                       std::chrono::milliseconds msec)
          {
-         // H16 and H20 signatures take an hour or more to generate
+         /*
+         We only test H10 signatures here since already they are quite slow (a
+         few seconds per signature). On a fast machine, H16 signatures take 1-2
+         minutes to generate and H20 signatures take 5-10 minutes to generate
+         */
          std::vector<std::string> xmss_params
             {
             "XMSS_SHA2-256_W16_H10",
@@ -2050,6 +2149,42 @@ class Speed final : public Command
          }
 #endif
 
+#if defined(BOTAN_HAS_SCRYPT)
+
+      void bench_scrypt(const std::string& /*provider*/,
+                        std::chrono::milliseconds msec)
+         {
+
+         for(size_t N : { 8192, 16384, 32768, 65536 })
+            {
+            for(size_t r : { 1, 8 })
+               {
+               for(size_t p : { 1, 4, 8 })
+                  {
+                  std::unique_ptr<Timer> scrypt_timer = make_timer(
+                     "scrypt-" + std::to_string(N) + "-" +
+                     std::to_string(r) + "-" + std::to_string(p));
+
+                  uint8_t out[64];
+                  uint8_t salt[8];
+                  rng().randomize(salt, sizeof(salt));
+
+                  while(scrypt_timer->under(msec))
+                     {
+                     scrypt_timer->run([&] {
+                        Botan::scrypt(out, sizeof(out), "password",
+                                      salt, sizeof(salt), N, r, p);
+                        });
+                     }
+
+                  record_result(scrypt_timer);
+                  }
+               }
+            }
+
+         }
+
+#endif
 
 #if defined(BOTAN_HAS_NEWHOPE) && defined(BOTAN_HAS_CHACHA_RNG)
       void bench_newhope(const std::string& /*provider*/,

@@ -95,6 +95,15 @@ word bigint_sub3(word z[],
                  const word x[], size_t x_size,
                  const word y[], size_t y_size);
 
+/**
+* Return abs(x-y), ie if x >= y, then compute z = x - y
+* Otherwise compute z = y - x
+* No borrow is possible since the result is always >= 0
+*
+* Returns 1 if x >= y or -1 if x < y
+*/
+int32_t bigint_sub_abs(word z[], const word x[], const word y[], size_t size);
+
 /*
 * Shift Operations
 */
@@ -134,10 +143,10 @@ void bigint_monty_redc(word z[],
                        size_t ws_size);
 
 /**
-* Compare x and y
+* Compare x and y returning early
 */
 int32_t bigint_cmp(const word x[], size_t x_size,
-                  const word y[], size_t y_size);
+                   const word y[], size_t y_size);
 
 /**
 * Compute ((n1<<bits) + n0) / d
@@ -157,12 +166,14 @@ void bigint_comba_mul6(word z[12], const word x[6], const word y[6]);
 void bigint_comba_mul8(word z[16], const word x[8], const word y[8]);
 void bigint_comba_mul9(word z[18], const word x[9], const word y[9]);
 void bigint_comba_mul16(word z[32], const word x[16], const word y[16]);
+void bigint_comba_mul24(word z[48], const word x[24], const word y[24]);
 
 void bigint_comba_sqr4(word out[8], const word in[4]);
 void bigint_comba_sqr6(word out[12], const word in[6]);
 void bigint_comba_sqr8(word out[16], const word in[8]);
 void bigint_comba_sqr9(word out[18], const word in[9]);
 void bigint_comba_sqr16(word out[32], const word in[16]);
+void bigint_comba_sqr24(word out[48], const word in[24]);
 
 /*
 * High Level Multiplication/Squaring Interfaces

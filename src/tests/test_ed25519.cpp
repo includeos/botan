@@ -28,9 +28,14 @@ class Ed25519_Verification_Tests : public PK_Signature_Verification_Test
          "pubkey/ed25519_verify.vec",
          "Pubkey,Msg,Signature", "Valid") {}
 
+      bool clear_between_callbacks() const override
+         {
+         return false;
+         }
+
       std::unique_ptr<Botan::Public_Key> load_public_key(const VarMap& vars) override
          {
-         const std::vector<uint8_t> pubkey = get_req_bin(vars, "Pubkey");
+         const std::vector<uint8_t> pubkey = vars.get_req_bin("Pubkey");
 
          std::unique_ptr<Botan::Ed25519_PublicKey> key(new Botan::Ed25519_PublicKey(pubkey));
 
@@ -47,10 +52,15 @@ class Ed25519_Signature_Tests final : public PK_Signature_Generation_Test
             "pubkey/ed25519.vec",
             "Privkey,Pubkey,Msg,Signature") {}
 
+      bool clear_between_callbacks() const override
+         {
+         return false;
+         }
+
       std::unique_ptr<Botan::Private_Key> load_private_key(const VarMap& vars) override
          {
-         const std::vector<uint8_t> privkey = get_req_bin(vars, "Privkey");
-         const std::vector<uint8_t> pubkey = get_req_bin(vars, "Pubkey");
+         const std::vector<uint8_t> privkey = vars.get_req_bin("Privkey");
+         const std::vector<uint8_t> pubkey = vars.get_req_bin("Pubkey");
 
          Botan::secure_vector<uint8_t> seed(privkey.begin(), privkey.end());
 

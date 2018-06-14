@@ -45,12 +45,14 @@ AlgorithmIdentifier RSA_PublicKey::algorithm_identifier() const
 
 std::vector<uint8_t> RSA_PublicKey::public_key_bits() const
    {
-   return DER_Encoder()
-      .start_cons(SEQUENCE)
+   std::vector<uint8_t> output;
+   DER_Encoder der(output);
+   der.start_cons(SEQUENCE)
          .encode(m_n)
          .encode(m_e)
-      .end_cons()
-      .get_contents_unlocked();
+      .end_cons();
+
+   return output;
    }
 
 RSA_PublicKey::RSA_PublicKey(const AlgorithmIdentifier&,
@@ -141,14 +143,19 @@ RSA_PrivateKey::RSA_PrivateKey(RandomNumberGenerator& rng,
 
    m_e = exp;
 
+   const size_t p_bits = (bits + 1) / 2;
+   const size_t q_bits = bits - p_bits;
+
    do
       {
-      m_p = random_prime(rng, (bits + 1) / 2, m_e);
-      m_q = random_prime(rng, bits - m_p.bits(), m_e);
+      m_p = generate_rsa_prime(rng, rng, p_bits, m_e);
+      m_q = generate_rsa_prime(rng, rng, q_bits, m_e);
       m_n = m_p * m_q;
       } while(m_n.bits() != bits);
 
+   // FIXME: lcm calls gcd which is not const time
    const BigInt phi_n = lcm(m_p - 1, m_q - 1);
+   // FIXME: this uses binary ext gcd because phi_n is even
    m_d = inverse_mod(m_e, phi_n);
    m_d1 = m_d % (m_p - 1);
    m_d2 = m_d % (m_q - 1);
@@ -356,7 +363,7 @@ class RSA_Public_Operation
 
          const size_t powm_window = 1;
 
-         auto powm_m_n = monty_precompute(m_monty_n, m, powm_window);
+         auto powm_m_n = monty_precompute(m_monty_n, m, powm_window, false);
          return monty_execute_vartime(*powm_m_n, m_e);
          }
 

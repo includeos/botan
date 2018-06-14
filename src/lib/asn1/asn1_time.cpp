@@ -37,8 +37,8 @@ X509_Time::X509_Time(const std::string& t_spec, ASN1_Tag tag)
 
 void X509_Time::encode_into(DER_Encoder& der) const
    {
-   if(m_tag != GENERALIZED_TIME && m_tag != UTC_TIME)
-      throw Invalid_Argument("X509_Time: Bad encoding tag");
+   BOTAN_ARG_CHECK(m_tag == UTC_TIME || m_tag == GENERALIZED_TIME,
+                   "X509_Time: Bad encoding tag");
 
    der.add_object(m_tag, UNIVERSAL, to_string());
    }
@@ -161,21 +161,17 @@ void X509_Time::set_to(const std::string& t_spec, ASN1_Tag spec_tag)
 
    BOTAN_ASSERT(spec_tag == UTC_TIME || spec_tag == GENERALIZED_TIME, "Invalid tag.");
 
-   if(t_spec.empty())
-      throw Invalid_Argument("Time string must not be empty.");
+   BOTAN_ARG_CHECK(t_spec.size() > 0, "Time string must not be empty.");
 
-   if(t_spec.back() != 'Z')
-      throw Unsupported_Argument("Botan does not support times with timezones other than Z: " + t_spec);
+   BOTAN_ARG_CHECK(t_spec.back() == 'Z', "Botan does not support times with timezones other than Z");
 
    if(spec_tag == GENERALIZED_TIME)
       {
-      if(t_spec.size() != 15)
-         throw Invalid_Argument("Invalid GeneralizedTime string: '" + t_spec + "'");
+      BOTAN_ARG_CHECK(t_spec.size() == 15, "Invalid GeneralizedTime string");
       }
    else if(spec_tag == UTC_TIME)
       {
-      if(t_spec.size() != 13)
-         throw Invalid_Argument("Invalid UTCTime string: '" + t_spec + "'");
+      BOTAN_ARG_CHECK(t_spec.size() == 13, "Invalid UTCTime string");
       }
 
    const size_t YEAR_SIZE = (spec_tag == UTC_TIME) ? 2 : 4;
@@ -213,7 +209,7 @@ void X509_Time::set_to(const std::string& t_spec, ASN1_Tag spec_tag)
       }
 
    if(!passes_sanity_check())
-      throw Invalid_Argument("Time did not pass sanity check: " + t_spec);
+      throw Invalid_Argument("Time " + t_spec + " does not seem to be valid");
    }
 
 /*
@@ -221,13 +217,26 @@ void X509_Time::set_to(const std::string& t_spec, ASN1_Tag spec_tag)
 */
 bool X509_Time::passes_sanity_check() const
    {
-   if(m_year < 1950 || m_year > 2100)
+   if(m_year < 1950 || m_year > 2200)
       return false;
    if(m_month == 0 || m_month > 12)
       return false;
-   if(m_day == 0 || m_day > 31)
+
+   const uint32_t days_in_month[12] = { 31, 28+1, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+
+   if(m_day == 0 || m_day > days_in_month[m_month-1])
       return false;
-   if(m_hour >= 24 || m_minute > 60 || m_second > 60)
+
+   if(m_month == 2 && m_day == 29)
+      {
+      if(m_year % 4 != 0)
+         return false; // not a leap year
+
+      if(m_year % 100 == 0 && m_year % 400 != 0)
+         return false;
+      }
+
+   if(m_hour >= 24 || m_minute >= 60 || m_second > 60)
       return false;
 
    if (m_tag == UTC_TIME)

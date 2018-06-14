@@ -79,8 +79,12 @@ if [ "$TRAVIS_OS_NAME" = "linux" ]; then
         # all C++ features used in the manual. Install python-requests to avoid
         # problem in Ubuntu packaged version, see
         # http://stackoverflow.com/questions/32779919/no-module-named-for-requests
-        sudo apt-get remove python-requests python-openssl
-        sudo pip install requests sphinx pyopenssl
+        #
+        # Reinstall roman due to https://github.com/sphinx-doc/sphinx/issues/5022
+        #
+
+        sudo apt-get remove python-requests python-openssl python-roman
+        sudo pip install requests pyopenssl roman sphinx
     fi
 
 elif [ "$TRAVIS_OS_NAME" = "osx" ]; then
